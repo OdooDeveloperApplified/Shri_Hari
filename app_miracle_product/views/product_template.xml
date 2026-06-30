@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_product_template_form_inherit_custom_page" model="ir.ui.view">
+        <field name="name">product.template.form.inherit.custom.page</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_only_form_view"/>
+        <field name="arch" type="xml">
+            <!-- Insert button for sending product to miracle -->
+            <xpath expr="//header" position="inside">
+
+                <!-- Upload Button -->
+                <button name="action_upload_to_miracle"
+                        type="object"
+                        string="Upload To Miracle"
+                        class="btn-primary"
+                        />
+
+                <!-- Sync Button -->
+                <button name="action_sync_from_miracle"
+                        type="object"
+                        string="Sync From Miracle"
+                        class="btn-secondary"
+                        invisible="not miracle_product_id or not is_miracle_product"/>
+            </xpath>
+
+            <!-- Insert new page inside existing notebook -->
+            <xpath expr="//notebook" position="inside">
+                <page string="Miracle Product">
+                    <group>
+                        <group>
+                            <field name="miracle_product_id"/>
+                            <field name="miracle_tax_string"/>
+                            <field name="is_miracle_product"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+
+        </field>
+    </record>
+</odoo>

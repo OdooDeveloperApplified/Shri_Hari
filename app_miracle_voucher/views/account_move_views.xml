@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    
+    <record id="view_account_move_form_inherit_miracle_voucher" model="ir.ui.view">
+        <field name="name">account.move.form.miracle.voucher</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_move_form"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//header" position="inside">
+                <button name="action_upload_invoice_to_miracle"
+                        string="Upload to Miracle"
+                        type="object"
+                        class="btn-primary"
+                        invisible="state != 'posted'"/>
+
+                <!-- <button name="action_sync_invoice_from_miracle"
+                        string="Sync from Miracle"
+                        type="object"
+                        class="btn-secondary"
+                        /> -->
+            </xpath>
+
+            <xpath expr="//field[@name='invoice_date']" position="after">
+                <field name="miracle_reason_id" modifiers="{'invisible': ['|',['move_type', 'not in', ['out_refund','in_refund']],['invoice_line_ids.product_id', '!=', false]],'required': [['move_type', 'in', ['out_refund','in_refund']]]}"/>
+            </xpath>
+            <xpath expr="//notebook" position="inside">
+                <page string="Miracle Voucher">
+                    <group>
+                        <field name="miracle_voucher_id"/>
+                        <field name="is_miracle_voucher"/>
+                        <!-- <field name="miracle_reason_id" modifiers="{'invisible': ['|',['move_type', 'not in', ['out_refund','in_refund']],['invoice_line_ids.product_id', '!=', false]],'required': [['move_type', 'in', ['out_refund','in_refund']]]}"/> -->
+                    </group>
+                </page>
+            </xpath>
+
+        </field>
+    </record>
+
+</odoo>

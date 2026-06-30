@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    
+    <record id="view_account_payment_form_inherited_miracle_voucher" model="ir.ui.view">
+        <field name="name">account.payment.form.miracle.voucher</field>
+        <field name="model">account.payment</field>
+        <field name="inherit_id" ref="account.view_account_payment_form"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//header" position="inside">
+                <button name="action_send_payment_to_miralce"
+                        string="Upload to Miracle"
+                        type="object"
+                        class="btn-primary"/>
+            </xpath>
+            <xpath expr="//notebook" position="inside">
+                <page string="Miracle Voucher">
+                    <group>
+                        <field name="miracle_voucher_id"/>
+                        <field name="is_miracle_voucher"/>
+                    </group>
+                </page>
+            </xpath>
+
+        </field>
+    </record>
+
+</odoo>

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_company_form_miracle" model="ir.ui.view">
+        <field name="name">res.company.form.miracle</field>
+        <field name="model">res.company</field>
+        <field name="inherit_id" ref="base.view_company_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Miracle Cloud ERP" name="miracle_cloud_erp_config">
+                    <group>
+                        <group>
+                            <field name="miracle_base_url"/>
+                            <field name="miracle_authapi"/>
+                            <field name="miracle_urlkey"/>
+                            <field name="miracle_clientid"/>
+                            <field name="miracle_apikey" password="True"/>
+                            <field name="miracle_token_generated_at"/>
+                            <field name="miracle_token_expiry"/>
+                        </group>
+
+                        <group string="Company Sync Configuration">
+                            <field name="sync_to_another_companies"/>
+                            
+                            <field name="sync_target_company_ids"
+                                   widget="many2many_tags"
+                                   invisible="not sync_to_another_companies"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

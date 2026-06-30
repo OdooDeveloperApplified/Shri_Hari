@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <menuitem id="menu_miracle_root"
+              name="Miracle"
+              parent="base.menu_custom"
+              sequence="120"
+              groups="base.group_no_one"/>
+
+    <menuitem id="menu_miracle_token_session"
+              name="Token Sessions"
+              parent="menu_miracle_root"
+              action="action_miracle_token_session"
+              sequence="1"
+              groups="base.group_no_one"/>
+
+    <menuitem id="menu_miracle_api_log"
+        name="API Logs"
+        parent="menu_miracle_root"
+        action="action_miracle_api_log"
+        sequence="2"
+        groups="base.group_no_one"/>
+
+</odoo>

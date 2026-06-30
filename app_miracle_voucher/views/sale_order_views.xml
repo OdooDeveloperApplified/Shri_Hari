@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    
+    <record id="view_sale_order_form_inherit_miracle_voucher" model="ir.ui.view">
+        <field name="name">sale.order.form.miracle.voucher</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//header" position="inside">
+                <button name="action_upload_sale_to_miracle"
+                        string="Upload to Miracle"
+                        type="object"
+                        class="btn-primary"
+                        invisible="state not in ['draft','sale']"/>
+
+                <button name="action_sync_sale_from_miracle"
+                        type="object"
+                        string="Sync From Miracle"
+                        class="btn-secondary"
+                        invisible="(not miracle_sale_quotation_id and not miracle_sale_order_id) or not is_miracle_voucher"/>
+            </xpath>
+            <xpath expr="//notebook" position="inside">
+                <page string="Miracle Voucher">
+                    <group>
+                        <field name="miracle_sale_quotation_id"/>
+                        <field name="miracle_sale_order_id"/>
+                        <field name="is_miracle_voucher"/>
+                    </group>
+                </page>
+            </xpath>
+
+        </field>
+    </record>
+
+</odoo>

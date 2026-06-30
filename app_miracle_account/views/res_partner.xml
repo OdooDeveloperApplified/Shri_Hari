@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <record id="view_partner_form_miracle_tab" model="ir.ui.view">
+        <field name="name">res.partner.form.miracle.tab</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//sheet" position="before">
+                <header>
+                    <button name="action_upload_account_to_miracle"
+                            string="Upload To Miracle"
+                            type="object"
+                            class="btn-primary"
+                            icon="fa-upload"/>
+
+                    <button name="action_sync_account_from_miracle"
+                            type="object"
+                            string="Sync From Miracle"
+                            class="btn-secondary"
+                            invisible="not miracle_account_id or not is_miracle_account"/>
+                </header>
+            </xpath>
+
+            <!-- Insert new tab inside notebook -->
+            <xpath expr="//notebook" position="inside">
+                <page string="Miracle">
+
+                    <group>
+                        <group string="Miracle Information">
+                            <field name="miracle_account_id" readonly="1"/>
+                            <field name="is_miracle_account" readonly="1"/>
+                            <field name="miracle_acc_alias"/>
+                            <field name="miracle_areanm"/>
+                        </group>
+                        <group string="Account Group Details">
+                            <field name="miracle_acc_group"/>
+                            <field name="miracle_sup_group"/>
+                            <field name="miracle_acc_status"/>
+                            <field name="miracle_transport"/>
+                        </group>
+                    </group>
+
+                    <group>
+                        <group string="Additional Contact Details">
+                            <field name="miracle_mob2"/>
+                            <field name="miracle_phone2"/>
+                            <field name="miracle_rphone1"/>
+                            <field name="miracle_rphone2"/>
+                            <field name="miracle_factory_no"/>
+                        </group>
+                        <group string="Government Details">
+                            <field name="miracle_aadhar_no"/>
+                            <field name="miracle_udyam_no"/>
+                            <field name="miracle_udyam_type"/>
+                            <field name="miracle_udyam_activity"/>
+                        </group>
+                    </group>
+
+                    <group>
+                        <group string="Balance Details">
+                            <field name="miracle_opening_balance"/>
+                            <field name="miracle_closing_balance"/>
+                            <field name="credit" />
+                            <field name="debit" />
+                        </group>
+                    </group>
+
+                </page>
+            </xpath>
+
+        </field>
+    </record>
+
+</odoo>

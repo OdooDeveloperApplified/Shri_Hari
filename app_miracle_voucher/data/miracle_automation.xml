@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ================================================================
+         ODOO 18 AUTOMATION RULES FOR MIRACLE CLOUD ERP SYNC
+         
+         KEY DIFFERENCES FROM ODOO 16/17:
+         - Separate ir.actions.server record is REQUIRED
+         - Linked to base.automation via action_server_ids
+         - trigger: on_create_or_write  (covers create + every save)
+         - on_create / on_write are deprecated in v17/18
+    ================================================================ -->
+
+
+    <!-- ================================================================
+         1. SALE ORDER
+            - on_create_or_write : fires on new save + every subsequent save
+            Parent: sale.order
+    ================================================================ -->
+
+    <!-- Server Action -->
+    <record id="server_action_miracle_sale_order" model="ir.actions.server">
+        <field name="name">Miracle : Sync Sale Order To Miracle</field>
+        <field name="model_id" ref="sale.model_sale_order"/>
+        <field name="state">code</field>
+        <field name="code"><![CDATA[
+for record in records:
+    try:
+        record.action_upload_sale_to_miracle()
+    except Exception as e:
+        log(
+            "Miracle Sale Order Sync Failed [%s]: %s" % (record.name, str(e)),
+            level='error'
+        )
+]]>
+        </field>
+    </record>
+
+    <!-- Automation Rule -->
+    <record id="automation_miracle_sale_order" model="base.automation">
+        <field name="name">Miracle : Auto Sync Sale Order On Save</field>
+        <field name="model_id" ref="sale.model_sale_order"/>
+        <field name="trigger">on_create_or_write</field>
+        <field name="action_server_ids" eval="[(4, ref('server_action_miracle_sale_order'))]"/>
+        <field name="active">False</field>
+    </record>
+
+
+    <!-- ================================================================
+         2. SALE ORDER LINE
+            - on_create_or_write : fires when any line is added/edited
+            Calls upload on parent sale.order
+    ================================================================ -->
+
+    <!-- Server Action -->
+    <!-- <record id="server_action_miracle_sale_order_line" model="ir.actions.server">
+        <field name="name">Miracle : Sync Sale Order On Line Save</field>
+        <field name="model_id" ref="sale.model_sale_order_line"/>
+        <field name="state">code</field>
+        <field name="code"><![CDATA[
+order_ids = records.mapped('order_id')
+for order in order_ids:
+    try:
+        if order.miracle_sale_quotation_id or order.miracle_sale_order_id:
+            order.action_upload_sale_to_miracle()
+    except Exception as e:
+        log(
+            "Miracle Sale Line Sync Failed [%s]: %s" % (order.name, str(e)),
+            level='error'
+        )
+]]>
+        </field>
+    </record> -->
+
+    <!-- Automation Rule -->
+    <!-- <record id="automation_miracle_sale_order_line" model="base.automation">
+        <field name="name">Miracle : Auto Sync Sale Order On Line Save</field>
+        <field name="model_id" ref="sale.model_sale_order_line"/>
+        <field name="trigger">on_create_or_write</field>
+        <field name="action_server_ids" eval="[(4, ref('server_action_miracle_sale_order_line'))]"/>
+        <field name="active">True</field>
+    </record> -->
+
+    <!-- ================================================================
+         3. ACCOUNT MOVE (Invoice / Bill / Credit Note / Debit Note)
+            - on_create_or_write : fires on new invoice save + every save
+            - move_type filter inside code handles only relevant types
+    ================================================================ -->
+
+    <!-- Server Action -->
+    <record id="server_action_miracle_account_move" model="ir.actions.server">
+        <field name="name">Miracle : Sync Invoice Miracle</field>
+        <field name="model_id" ref="account.model_account_move"/>
+        <field name="state">code</field>
+        <field name="code"><![CDATA[
+ALLOWED_TYPES = ['out_invoice', 'out_refund']
+for record in records:
+    try:
+        if record.move_type in ALLOWED_TYPES:
+            record.action_upload_invoice_to_miracle()
+    except Exception as e:
+        log(
+            "Miracle Invoice Sync Failed [%s]: %s" % (record.name, str(e)),
+            level='error'
+        )
+]]>
+        </field>
+    </record>
+
+    <!-- Automation Rule -->
+    <record id="automation_miracle_account_move" model="base.automation">
+        <field name="name">Miracle : Auto Sync Invoice On Save</field>
+        <field name="model_id" ref="account.model_account_move"/>
+        <field name="trigger">on_create_or_write</field>
+        <field name="action_server_ids" eval="[(4, ref('server_action_miracle_account_move'))]"/>
+        <field name="active">False</field>
+    </record>
+
+
+    <!-- ================================================================
+         4. ACCOUNT MOVE LINE (Invoice Lines)
+            - on_create_or_write : fires when invoice line added/edited
+            Calls upload on parent account.move
+    ================================================================ -->
+
+    <!-- Server Action -->
+    <record id="server_action_miracle_account_move_line" model="ir.actions.server">
+        <field name="name">Miracle : Sync Invoice On Line Save</field>
+        <field name="model_id" ref="account.model_account_move_line"/>
+        <field name="state">code</field>
+        <field name="code"><![CDATA[
+ALLOWED_TYPES = ['out_invoice', 'out_refund']
+move_ids = records.mapped('move_id')
+for move in move_ids:
+    try:
+        if move.move_type in ALLOWED_TYPES and move.miracle_voucher_id:
+            move.action_upload_invoice_to_miracle()
+    except Exception as e:
+        log(
+            "Miracle Invoice Line Sync Failed [%s]: %s" % (move.name, str(e)),
+            level='error'
+        )
+]]>
+        </field>
+    </record>
+
+    <!-- Automation Rule -->
+    <record id="automation_miracle_account_move_line" model="base.automation">
+        <field name="name">Miracle : Auto Sync Invoice On Line Save</field>
+        <field name="model_id" ref="account.model_account_move_line"/>
+        <field name="trigger">on_create_or_write</field>
+        <field name="action_server_ids" eval="[(4, ref('server_action_miracle_account_move_line'))]"/>
+        <field name="active">False</field>
+    </record>
+
+
+    <!-- ================================================================
+         5. STOCK PICKING (Delivery / Receipt)
+            - on_create_or_write : fires on new picking save + every save
+    ================================================================ -->
+
+    <!-- Server Action -->
+    <record id="server_action_miracle_stock_picking" model="ir.actions.server">
+        <field name="name">Miracle : Sync Delivery To Miracle</field>
+        <field name="model_id" ref="stock.model_stock_picking"/>
+        <field name="state">code</field>
+        <field name="code"><![CDATA[
+for record in records:
+    try:
+        # Strictly upload ONLY if it's an outgoing delivery linked to a Sale Order
+        if record.picking_type_id.code == 'outgoing' and record.sale_id:
+            record.action_upload_challan_to_miracle()
+    except Exception as e:
+        log(
+            "Miracle Picking Sync Failed [%s]: %s" % (record.name, str(e)),
+            level='error'
+        )
+]]>
+        </field>
+    </record>
+
+    <!-- Automation Rule -->
+    <record id="automation_miracle_stock_picking" model="base.automation">
+        <field name="name">Miracle : Auto Sync Delivery On Save</field>
+        <field name="model_id" ref="stock.model_stock_picking"/>
+        <field name="trigger">on_create_or_write</field>
+        <field name="action_server_ids" eval="[(4, ref('server_action_miracle_stock_picking'))]"/>
+        <field name="active">True</field>
+    </record>
+
+</odoo>

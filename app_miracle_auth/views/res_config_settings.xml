@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_miracle" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.miracle</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <app name="miracle_settings" string="Miracle" logo="/app_mircle_auth/static/description/icon.png">
+                    <block title="Miracle Cloud ERP Configuration">
+                        <setting string="Base URL" company_dependent="1">
+                            <field name="miracle_base_url" placeholder="https://tpaapi.miracleclouderp.com/"/>
+                        </setting>
+                        <setting string="Auth API Endpoint" company_dependent="1">
+                            <field name="miracle_authapi"/>
+                        </setting>
+                        <setting string="URL Key" company_dependent="1">
+                            <field name="miracle_urlkey"/>
+                        </setting>
+                        <setting string="Client ID" company_dependent="1">
+                            <field name="miracle_clientid"/>
+                        </setting>
+                        <setting string="API Key" company_dependent="1">
+                            <field name="miracle_apikey" password="True"/>
+                        </setting>
+                        <setting>
+                            <div class="mt16">
+                                <button name="action_generate_miracle_token" type="object" string="Generate ERP Token" class="btn btn-primary"/>
+                            </div>
+                        </setting>
+                    </block>
+                </app>
+            </xpath>
+        </field>
+    </record>
+</odoo>
+<!-- <button name="%(action_miracle_token_session)d"
+        type="action"
+        string="Token Sessions"
+        class="oe_stat_button"
+        icon="fa-key">
+        <field name="miracle_session_count" widget="statinfo"/>
+    </button> -->

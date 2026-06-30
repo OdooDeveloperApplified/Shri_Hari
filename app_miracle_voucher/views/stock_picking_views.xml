@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_picking_form_miracle_voucher" model="ir.ui.view">
+        <field name="name">stock.picking.form.miracle.voucher</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//header" position="inside">
+                <button name="action_upload_challan_to_miracle"
+                        type="object"
+                        string="Upload Challan to Miracle"
+                        class="btn-primary"
+                        invisible="state != 'done'"/>
+            </xpath>
+            <xpath expr="//notebook" position="inside">
+                <page string="Miracle Voucher">
+                    <group>
+                        <field name="miracle_voucher_id"/>
+                        <field name="is_miracle_voucher"/>
+                    </group>
+                </page>
+            </xpath>
+
+        </field>
+    </record>
+
+</odoo>

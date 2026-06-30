@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="view_account_form_miracle_inherit" model="ir.ui.view">
+        <field name="name">account.account.form.miracle.inherit</field>
+        <field name="model">account.account</field>
+        <field name="inherit_id" ref="account.view_account_form"/>
+        <field name="arch" type="xml">
+
+            <!-- <xpath expr="//sheet" position="before">
+                <header>
+                    <button name="action_upload_account_to_miracle"
+                            string="Upload to Miracle"
+                            type="object"
+                            class="btn-primary"/>
+                </header>
+            </xpath> -->
+
+            <xpath expr="//notebook" position="inside">
+                <page string="Miracle Account">
+                    <group>
+                        <field name="is_miracle_account"/>
+                        <field name="miracle_account_id"/>
+                        <field name="miracle_acc_group"/>
+                        <field name="miracle_sup_group"/>
+                    </group>
+                </page>
+            </xpath>
+
+        </field>
+    </record>
+
+</odoo>

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_miracle_inherit_account" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.miracle.inherit.account</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="app_miracle_product.res_config_settings_view_form_miracle_inherit_products"/>
+        <field name="arch" type="xml">
+            <xpath expr="//button[@name='action_get_miracle_product_ledger']/ancestor::setting" position="after">
+                <setting>
+                    <div class="mt16">
+                        <button name="action_get_miracle_account_ledger"
+                            type="object"
+                            string="Get Miracle Account Ledger"
+                            class="btn btn-secondary"/>
+                    </div>
+                    <div class="mt16">
+                        <button name="action_get_miracle_account"
+                            type="object"
+                            string="Get Miracle Account"
+                            class="btn btn-secondary"/>
+                    </div>
+                </setting>
+            </xpath>
+        </field>
+    </record>
+</odoo>

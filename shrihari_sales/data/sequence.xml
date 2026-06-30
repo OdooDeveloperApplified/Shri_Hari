@@ -1,0 +1,9 @@
+<odoo>
+    <record id="seq_sales_capture" model="ir.sequence">
+        <field name="name">Sales Capture Sequence</field>
+        <field name="code">sale.capture</field>
+        <field name="prefix">MS</field>
+        <field name="padding">4</field>
+        <field name="company_id" eval="False"/>
+    </record>
+</odoo>

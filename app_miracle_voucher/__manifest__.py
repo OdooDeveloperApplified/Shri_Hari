@@ -1,0 +1,26 @@
+{
+    'name': 'Miracle Cloud Erp Voucher Manage',
+    'version': '18.0.1.0',
+    'sequence': -104,
+    'author': 'Applified',
+    'website': 'https://www.applified.in',
+    'summary': 'Miracle Cloud Erp Voucher Manage By Applified',
+    'depends': ['base','base_automation','contacts','app_miracle_auth','account','sale','purchase','app_miracle_account','app_miracle_product'],
+    'data': [
+        'security/ir.model.access.csv',
+        'data/miracle_automation.xml',
+        'data/miracle_sync_cron.xml',
+        'views/res_company.xml',
+        # 'views/res_config_settings.xml',
+        'views/sale_order_views.xml',
+        'views/purchase_order_views.xml',
+        'views/miracle_reason_views.xml',
+        'views/account_move_views.xml',
+        'views/stock_picking_views.xml',
+        'views/account_payment_views.xml',
+        # 'views/menu.xml'
+    ],
+    'license': 'OPL-1',
+    'installable': True,
+    'application': True,
+}

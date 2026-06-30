@@ -1,0 +1,47 @@
+<?xml version='1.0' encoding='utf-8'?>
+<odoo>
+    <record id="view_miracle_reason_list" model="ir.ui.view">
+        <field name="name">miracle.reason.list</field>
+        <field name="model">miracle.reason</field>
+        <field name="arch" type="xml">
+            <list string="Miracle Reasons">
+                <field name="code"/>
+                <field name="name"/>
+                <field name="active"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_miracle_reason_form" model="ir.ui.view">
+        <field name="name">miracle.reason.form</field>
+        <field name="model">miracle.reason</field>
+        <field name="arch" type="xml">
+            <form string="Miracle Reason">
+                <sheet>
+                    <group>
+                        <field name="code"/>
+                        <field name="name"/>
+                        <field name="active"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_miracle_reason" model="ir.actions.act_window">
+        <field name="name">Miracle Reason</field>
+        <field name="res_model">miracle.reason</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <menuitem id="menu_miracle_root"
+              name="Miracle"
+              parent="account.menu_finance_configuration"
+              sequence="90"/>
+
+    <menuitem id="menu_miracle_reason"
+              name="Reason"
+              parent="menu_miracle_root"
+              action="action_miracle_reason"
+              sequence="1"/>
+</odoo>
