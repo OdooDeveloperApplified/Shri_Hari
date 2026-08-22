@@ -230,11 +230,19 @@ class SaleOrder(models.Model):
                 if tax:
                     tax_ids.append(tax.id)
 
+            qty1 = item.get('qty1') or 0.0
+            uom = product.uom_id
+            if uom:
+                if uom.uom_type == 'bigger':
+                    qty1 = qty1 / uom.factor_inv
+                elif uom.uom_type == 'smaller' and uom.factor > 0:
+                    qty1 = qty1 * uom.factor
+
             existing_line = existing_lines.get(miracle_prd)
 
             if existing_line:
                 existing_line.write({
-                    'product_uom_qty': item.get('qty1'),
+                    'product_uom_qty': qty1,
                     'price_unit': item.get('rate'),
                     'tax_id': [(6, 0, tax_ids)]
                 })
@@ -244,7 +252,7 @@ class SaleOrder(models.Model):
                     'order_id': self.id,
                     'product_id': product.id,
                     'name': product.name,
-                    'product_uom_qty': item.get('qty1'),
+                    'product_uom_qty': qty1,
                     'price_unit': item.get('rate'),
                     'tax_id': [(6, 0, tax_ids)]
                 })

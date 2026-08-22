@@ -10,6 +10,7 @@
         'data/sequence.xml',
         'views/sales_template_views.xml',
         'views/captured_sales_views.xml',
+        'views/res_config_settings_views.xml',
 
     ],
     'license': 'LGPL-3',

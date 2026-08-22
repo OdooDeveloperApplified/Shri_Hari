@@ -57,6 +57,13 @@ class StockPicking(models.Model):
 
             amount = qty * rate
 
+            uom = move.product_id.uom_id
+            ratio = 1.0
+            if uom.uom_type == 'bigger':
+                ratio = uom.factor_inv
+            elif uom.uom_type == 'smaller' and uom.factor > 0:
+                ratio = 1.0 / uom.factor
+
             # _logger.info("Product: %s | Qty: %s | Rate: %s", move.product_id.display_name, qty, rate)
 
             lot_lines = move.move_line_ids.filtered(lambda ml: ml.lot_id)
@@ -69,46 +76,47 @@ class StockPicking(models.Model):
             # ==========================
             if lot_lines:
                 for ml in lot_lines:
-                    items.append({
+                    item_dict = {
                         "prd": move.product_id.miracle_product_id,
                         "seqno": len(items) + 1,
-                        "qty1": ml.quantity,
+                        "batchnm": ml.lot_id.name,
+                        "locnm": "",
+                        "qty1": ml.quantity * ratio,
+                        "qty2": ml.quantity,
+                        "qty3": 0.0,
+                        "qty4": 0.0,
+                        "qty5": 0.0,
                         "txpaidrt": 0,
                         "rate": rate,
                         "amt": ml.quantity * rate,
-                        "batchnm": ml.lot_id.name,
-                    })
+                    }
+                    if self.picking_type_id.code == "outgoing":
+                        item_dict["ufddet"] = {
+                            "UBOX": 0,
+                            "UDESC": ""
+                        }
+                    items.append(item_dict)
             else:
-                items.append({
+                item_dict = {
                     "prd": move.product_id.miracle_product_id,
                     "seqno": len(items) + 1,
-                    "qty1": qty,
+                    "batchnm": "",
+                    "locnm": "",
+                    "qty1": qty * ratio,
+                    "qty2": qty,
+                    "qty3": 0.0,
+                    "qty4": 0.0,
+                    "qty5": 0.0,
                     "txpaidrt": 0,
                     "rate": rate,
                     "amt": amount,
-                })
-
-            # lot_name = ""
-            # move_line = move.move_line_ids.filtered(lambda ml: ml.lot_id)[:1]
-            # _logger.info("this is move_line %s",move_line)
-
-            # if move_line:
-            #     lot_name = move_line.lot_id.name
-            #     _logger.info("this is lot_name %s",lot_name)
-
-            # item_vals = {
-            #     "prd": move.product_id.miracle_product_id,
-            #     "seqno": seq,
-            #     "qty1": qty,
-            #     "txpaidrt": 0,
-            #     "rate": rate,
-            #     "amt": amount,
-            # }
-
-            # if lot_name:
-            #     item_vals["batchnm"] = lot_name
-
-            # items.append(item_vals)
+                }
+                if self.picking_type_id.code == "outgoing":
+                    item_dict["ufddet"] = {
+                        "UBOX": 0,
+                        "UDESC": ""
+                    }
+                items.append(item_dict)
 
         if not order:
             return company.miracle_notification(
@@ -121,10 +129,14 @@ class StockPicking(models.Model):
             "acc": self.partner_id.miracle_account_id,
             "billamt": order.amount_total,
             "flgcd": "D",
+            "narr": "",
             "invtyp": "GST" if self.partner_id.state_id == self.company_id.state_id else "IGST",
             "taxtyp": "T",
+            "docdt": "",
+            "docno": "",
             "items": items
         }
+        _logger.info("this is payload %s", payload)
 
         if self.picking_type_id.code == "outgoing":
             payload.update({

@@ -14,11 +14,11 @@
                         class="btn-primary"
                         invisible="state != 'posted'"/>
 
-                <!-- <button name="action_sync_invoice_from_miracle"
+                <button name="action_sync_invoice_from_miracle"
                         string="Sync from Miracle"
                         type="object"
                         class="btn-secondary"
-                        /> -->
+                        />
             </xpath>
 
             <xpath expr="//field[@name='invoice_date']" position="after">

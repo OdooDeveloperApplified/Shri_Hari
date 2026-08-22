@@ -38,10 +38,10 @@ class ResCompany(models.Model):
                 # "prdtype",
                 "slabnm",
                 "opamt",
-                "opqty1",
                 "recqty1",
                 "iqty1",
                 "clqty1",
+                # "uomnm", #if they give we will uncomment it
                 # "opqty2",
                 # "recqty2",
                 # "iqty2",

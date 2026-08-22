@@ -132,35 +132,61 @@ class ProductAPI(http.Controller):
             ('categ_id', 'child_of', category.id)
         ])
 
-        # Fetch all companies once
-        companies = request.env['res.company'].sudo().search([])
+        # Use the single default company for the user
+        company = user.company_id or request.env.company
         StockQuant = request.env['stock.quant']
 
         product_list = []
         for product in products:
-            best_company = None
-            best_available_qty = 0
 
-            # Check stock per company
-            for company in companies:
-                quants = StockQuant.with_company(company).sudo().search([
-                    ('product_id', '=', product.product_variant_id.id),
-                    ('company_id', '=', company.id),
-                    ('location_id.usage', '=', 'internal')
-                ])
+            # Check stock for the single company
+            quants = StockQuant.with_company(company).sudo().search([
+                ('product_id', '=', product.product_variant_id.id),
+                ('company_id', '=', company.id),
+                ('location_id.usage', '=', 'internal')
+            ])
 
-                total_qty = sum(quants.mapped('quantity'))
-                reserved_qty = sum(quants.mapped('reserved_quantity'))
+            total_qty = sum(quants.mapped('quantity'))
+            reserved_qty = sum(quants.mapped('reserved_quantity'))
 
-                free_qty = total_qty - reserved_qty
+            free_qty = total_qty - reserved_qty
 
-                # Find company with highest free stock
-                if free_qty > best_available_qty:
-                    best_available_qty = free_qty
-                    best_company = company
+            # Fetch ALL global pricing slabs for this product (ignoring user's specific pricelist)
+            # This ensures all 3000+ contacts get the offers automatically.
+            pricing_slabs = []
+            
+            domain = [
+                '|', ('product_tmpl_id', '=', product.id),
+                     ('product_id', '=', product.product_variant_id.id),
+                ('min_quantity', '>', 1)
+            ]
+            
+            # If a global pricelist is configured in settings, restrict slabs to only that pricelist
+            if company.mobile_app_pricelist_id:
+                domain.append(('pricelist_id', '=', company.mobile_app_pricelist_id.id))
+            
+            pricelist_items = request.env['product.pricelist.item'].sudo().search(domain, order='min_quantity asc')
+            # _logger.info("this is pricelist iteams %s and its name %s",pricelist_items, pricelist_items.name)
+            
+            for item in pricelist_items:
+                if item.compute_price == 'fixed':
+                    slab_price = item.fixed_price
+                elif item.compute_price == 'percentage':
+                    slab_price = product.list_price * (1 - (item.percent_price / 100.0))
+                else:
+                    slab_price = product.list_price # Fallback
+                    
+                if slab_price > 0:
+                    pricing_slabs.append({
+                        "min_qty": item.min_quantity,
+                        "price": round(slab_price, 2),
+                        "discount_message": f"Buy {int(item.min_quantity)}+ at ₹{round(slab_price, 2)}/box"
+                    })
+                # _logger.info("this are pricing slabs-------> %s",pricing_slabs)
 
             product_list.append({
-                'id': product.id,
+                # 'id': product.id,
+                'id': product.product_variant_id.id,
                 'name': product.name,
                 'default_code': product.default_code or '',
                 'list_price': product.list_price,
@@ -174,12 +200,14 @@ class ProductAPI(http.Controller):
                         for tax in product.taxes_id if tax.type_tax_use == 'sale'
                     ],
                 # 'qty_available': product.qty_available,
-                'free_qty': best_available_qty,
-                'best_company': best_company.name if best_company else None,
+                'free_qty': free_qty,
+                'best_company': company.name,
                 'uom': product.uom_id.name if product.uom_id else '',
                 'category': product.categ_id.name if product.categ_id else '',
+                'pricing_slabs': pricing_slabs,
                 'image_url': f"{base_url}/web/image/product.template/{product.id}/image_1920??t={int(datetime.now().timestamp())}" ##### Code for product image #########
             })
+            # _logger.info("this is product list %s",product_list)
 
         return Response(
             json.dumps({
@@ -300,8 +328,11 @@ class SaleCaptureCreateAPI(http.Controller):
                 "message": "Logged-in user has no associated contact"
             }), content_type='application/json')
 
+        # Create environment bound to the authenticated user so context (allowed_company_ids) is correct
+        user_env = request.env(user=user)
+
         # CREATE SALE CAPTURE
-        sale_capture = request.env['sale.capture'].sudo().create({
+        sale_capture = user_env['sale.capture'].sudo().create({
             'user_id': user.id,
             'customer_id': partner.id,
             'customer_street': partner.street,
@@ -320,6 +351,7 @@ class SaleCaptureCreateAPI(http.Controller):
 
         while True:
             product_id = kwargs.get(f'line_product_id[{index}]')
+            _logger.info("thissssss is product_id %s",product_id)
             qty = kwargs.get(f'line_qty[{index}]')
             price = kwargs.get(f'line_price[{index}]')
 
@@ -335,7 +367,8 @@ class SaleCaptureCreateAPI(http.Controller):
                     "message": f"Invalid qty/price at line {index}"
                 }), content_type='application/json')
 
-            product = request.env['product.product'].sudo().browse(int(product_id))
+            product = user_env['product.product'].sudo().browse(int(product_id))
+            _logger.info("thissss is product %s",product)
             if not product.exists():
                 return Response(json.dumps({
                     "success": False,
@@ -363,7 +396,7 @@ class SaleCaptureCreateAPI(http.Controller):
             }), content_type='application/json')
 
         # CREATE LINES
-        request.env['sale.capture.line'].sudo().create(order_lines)
+        user_env['sale.capture.line'].sudo().create(order_lines)
 
         # CREATE SALE ORDERS
         try:
@@ -758,4 +791,35 @@ class CountryStateAPI(http.Controller):
             "total_states": len(state_list),
             "states": state_list
         }), content_type='application/json')
+
+############### API to Get Miracle Credentials ########################## 
+class MiracleCredentialAPI(http.Controller):
+
+    @http.route('/get_miracle_credentials', type='http', auth='public', cors='*', methods=['POST'], csrf=False)
+    def get_miracle_credentials(self, **kwargs):
+
+        # Validate user (requires user_id in kwargs and valid Bearer token)
+        user, error_response = validate_api_request(request, kwargs)
+        if error_response:
+            return error_response
+
+        company = user.company_id or request.env.company
+        partner = user.partner_id
+
+        data = [{
+            "id": company.id,
+            "name": company.name,
+            "icon": "business",
+            "CLIENT_ID": company.miracle_clientid or "",
+            "API_KEY": company.miracle_apikey or "",
+            "ACCID": partner.miracle_account_id or "",
+            "MIRACLE_BASE_URL": company.miracle_base_url or "",
+            "URL_KEY": company.miracle_urlkey or ""
+        }]
+
+        return Response(json.dumps({
+            "success": True,
+            "data": data
+        }), content_type='application/json')
+
 

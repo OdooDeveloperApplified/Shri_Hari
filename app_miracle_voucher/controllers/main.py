@@ -6,7 +6,7 @@ _logger = logging.getLogger(__name__)
 
 class MiracleWebhookController(http.Controller):
 
-    @http.route('/miracle/webhook', auth='public', csrf=False, type='http', methods=['POST'])
+    @http.route(['/miracle/webhook/purchase', '/miracle/webhook/sale', '/miracle/webhook'], auth='public', csrf=False, type='http', methods=['POST'])
     def miracle_webhook(self, **kwargs):
         try:
             headers = dict(request.httprequest.headers)
@@ -123,6 +123,38 @@ class MiracleWebhookController(http.Controller):
                         
                     # Automatically validate the receipt to update inventory instantly
                     for picking in purchase.picking_ids:
+                        if picking.state not in ['cancel', 'done']:
+                            for move in picking.move_ids:
+                                move.quantity = move.product_uom_qty
+                            picking.button_validate()
+
+            elif voucher_type == "OS":
+                sale = request.env['sale.order'].sudo().with_company(company).search([
+                    ('miracle_sale_order_id', '=', unique_id)
+                ])
+
+                if not sale:
+                    partner = request.env['res.partner'].sudo().with_company(company).search([
+                        ('miracle_account_id', '=', data.get('acc'))
+                    ], limit=1)
+
+                    if not partner:
+                        _logger.error("Customer not found for account %s", data.get('acc'))
+                    else:
+                        sale = request.env['sale.order'].sudo().with_company(company).create({
+                            'partner_id': partner.id,
+                            'miracle_sale_order_id': unique_id
+                        })
+
+                if sale:
+                    # Sync the order lines directly
+                    sale.action_sync_sale_from_miracle()
+                    # Properly confirm it so Inventory Deliveries are generated
+                    if sale.state in ['draft', 'sent']:
+                        sale.action_confirm()
+                        
+                    # Automatically validate the delivery to update inventory instantly
+                    for picking in sale.picking_ids:
                         if picking.state not in ['cancel', 'done']:
                             for move in picking.move_ids:
                                 move.quantity = move.product_uom_qty

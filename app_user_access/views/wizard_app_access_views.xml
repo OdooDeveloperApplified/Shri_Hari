@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="partner_app_wizard_action_create_and_open" model="ir.actions.server">
+        <field name="name">Grant App Access</field>
+        <field name="model_id" ref="app_user_access.model_app_access_wizard"/>
+        <field name="binding_model_id" ref="base.model_res_partner"/>
+        <field name="state">code</field>
+        <field name="code">action = model.action_open_wizard()</field>
+    </record>
+
+    <record id="app_access_wizard_view_form" model="ir.ui.view">
+        <field name="name">app.access.wizard.view.form</field>
+        <field name="model">app.access.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Grant App Access">
+                <div class="mb-3">
+                    Select which contacts should be granted Internal User access for the Mobile App.
+                    The mobile number of each selected contact must be valid and unique.
+                    You must also specify a password for each user.
+                </div>
+                
+                <field name="user_ids" class="o_portal_wizard_user_one2many" widget="portal_wizard_user_one2many">
+                    <list string="Contacts" editable="bottom" create="false" delete="false">
+                        <field name="partner_id" force_save="1"/>
+                        <field name="mobile" readonly="is_internal"/>
+                        <field name="password" password="True" readonly="is_internal"/>
+                        
+                        <field name="mobile_state" column_invisible="True"/>
+                        
+                        <button name="action_refresh_modal" type="object" icon="fa-check text-success"
+                            invisible="mobile_state != 'ok'" title="Valid Mobile Number"/>
+                        <button name="action_refresh_modal" type="object" icon="fa-times text-danger"
+                            invisible="mobile_state != 'ko'" title="Missing Mobile Number"/>
+                        <button name="action_refresh_modal" type="object" icon="fa-user-times text-danger"
+                            invisible="mobile_state != 'exist'" title="Mobile Number already taken by another user"/>
+                            
+                        <field name="is_internal" column_invisible="True"/>
+                        
+                        <button string="Create App User" name="action_grant_access" type="object" class="btn-secondary"
+                            invisible="is_internal or mobile_state != 'ok'"/>
+                            
+                        <button string="Revoke Access" name="action_revoke_access" type="object" class="btn-secondary"
+                            invisible="not is_internal"/>
+                            
+                        <button string="Internal User Active" invisible="not is_internal"
+                            disabled="True" title="This partner is already an Internal User."/>
+                    </list>
+                </field>
+                <footer>
+                    <button string="Close" class="btn-primary" special="save" data-hotkey="v" />
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

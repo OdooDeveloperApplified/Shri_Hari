@@ -7,7 +7,7 @@
     'summary': 'Miracle Cloud Erp Product Manage By Applified',
     'depends': ['app_miracle_auth','product','sale', 'sale_management', 'stock', 'purchase', 'purchase_stock'],
     'data': [
-        # 'security/ir.model.access.csv',
+        'security/ir.model.access.csv',
         # 'data/ir_cron_data.xml',
         'views/res_company.xml',
         'views/res_config_settings.xml',

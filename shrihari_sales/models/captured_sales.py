@@ -43,7 +43,6 @@ class SaleCapture(models.Model):
     # MAIN LOGIC
     def action_create_sale_orders(self):
         SaleOrder = self.env['sale.order']
-        companies = self.env['res.company'].search([])
 
         for record in self:
             if record.state == 'processed':
@@ -52,102 +51,78 @@ class SaleCapture(models.Model):
             if not record.line_ids:
                 raise UserError(_("Please add at least one line."))
 
-            company_line_map = {}
-      
-            # STEP 1: Assign each line to correct company using REAL stock (stock.quant)
+            # Single Company Logic: Use the user's company or default company
+            company = record.user_id.company_id or self.env.company
             StockQuant = self.env['stock.quant']
             
-            for line in record.line_ids:
-                product = line.product_id
-                required_qty = line.product_uom_qty
-
-                best_company = False
-                best_qty = 0
-                for company in companies:
-                    # _logger.info(f"Checking stock for product {product.name} in best_company {best_company.name if best_company else 'None'} for best_qty {best_qty} qty {required_qty}")
-                    # Get real stock per company
-                    quants = StockQuant.with_company(company).sudo().search([
-                        ('product_id', '=', product.id),
-                        ('company_id', '=', company.id),
-                        ('location_id.usage', '=', 'internal')
-                    ])
-                    
-                    available_qty = sum(quants.mapped('quantity')) - sum(quants.mapped('reserved_quantity'))
-
-                    _logger.info(f"Product: {product.name}, Company: {company.name}, Available: {available_qty}")
-
-                    # Pick company which can fulfill demand
-                    if available_qty >= required_qty and available_qty > best_qty:
-                        best_qty = available_qty
-                        best_company = company
-                    
-                    _logger.info(f"Checked company {company.name} for product {product.name}: available {available_qty}, best so far: {best_qty} from {best_company.name if best_company else 'None'}")
-                    
-                _logger.info(f"Best Company so far for product {product.name}: {best_company.name if best_company else 'None'} with qty {best_qty}")
-
-                # No company can fulfill
-                if not best_company:
-                    raise UserError(
-                        _("Not enough stock for product %s in any company.") % product.display_name
-                    )
-
-                # Assign line to company
-                if best_company not in company_line_map:
-                    company_line_map[best_company] = []
-                _logger.info(company_line_map)
-
-                company_line_map[best_company].append(line)
-
             created_orders = []
 
-            # STEP 2: Create Sale Orders per company
-            for company, lines in company_line_map.items():
-                _logger.info(f"Creating Sale Order for company {company.name} with {len(lines)} lines.")
-                order_lines = []
-                for line in lines:
-                    order_lines.append((0, 0, {
-                        'product_id': line.product_id.id,
-                        'product_uom_qty': line.product_uom_qty,
-                        'price_unit': line.price_unit,
-                        'name': line.product_id.display_name,
-                    }))
+            # STEP 1: Prepare order lines for the single company
+            order_lines = []
+            for line in record.line_ids:
+                # Check stock for this specific product in the single company
+                quants = StockQuant.with_company(company).sudo().search([
+                    ('product_id', '=', line.product_id.id),
+                    ('company_id', '=', company.id),
+                    ('location_id.usage', '=', 'internal')
+                ])
+                available_qty = sum(quants.mapped('quantity')) - sum(quants.mapped('reserved_quantity'))
+                
+                if available_qty < line.product_uom_qty:
+                    raise UserError(
+                        _("Not enough stock for product %s. Available: %s, Requested: %s") % 
+                        (line.product_id.display_name, available_qty, line.product_uom_qty)
+                    )
 
-                order_vals = {
-                    'partner_id': record.customer_id.id,
-                    'company_id': company.id,
-                    'order_line': order_lines,
-                    'state': 'sale',
-                }
-                _logger.info(f"Order Vals for company {company.name}: {order_vals}")
+                order_lines.append((0, 0, {
+                    'product_id': line.product_id.id,
+                    'product_uom_qty': line.product_uom_qty,
+                    'price_unit': line.price_unit,
+                    'name': line.product_id.display_name,
+                }))
 
-                sale_order = SaleOrder.with_company(company).with_context(skip_miracle_sync=True).create(order_vals)
+            # STEP 2: Create a Single Sale Order
+            order_vals = {
+                'partner_id': record.customer_id.id,
+                'company_id': company.id,
+                'order_line': order_lines,
+                'state': 'sale',
+            }
+            _logger.info(f"Order Vals for single company {company.name}: {order_vals}")
 
-                # --- NEW LOGIC for Automation ---
-                # 1. Automate Delivery Validation
-                for picking in sale_order.picking_ids:
-                    picking.with_context(skip_miracle_sync=True).action_assign()
-                    for move_line in picking.move_ids:
-                        move_line.quantity = move_line.product_uom_qty
-                    picking.with_context(skip_miracle_sync=True).button_validate()
-                    
-                # 2. Automate Invoice Creation and Posting
-                invoice = sale_order.with_context(skip_miracle_sync=True)._create_invoices()
-                if invoice:
-                    invoice.with_context(skip_miracle_sync=True).action_post()
-                # --------------------------------
+            sale_order = SaleOrder.with_company(company).with_context(skip_miracle_sync=True).create(order_vals)
 
-                # --- Trigger Background Sync Cron Job ---
-                # 3. Upload delivery to miracle
-                cron_job = self.env.ref('app_miracle_voucher.cron_sync_miracle_deliveries', raise_if_not_found=False)
-                if cron_job:
-                    cron_job._trigger()
-                # ---------------------------------------------------
+            # 1. Automate Delivery Validation
+            for picking in sale_order.picking_ids:
+                picking.with_context(skip_miracle_sync=True).action_assign()
+                for move_line in picking.move_ids:
+                    move_line.quantity = move_line.product_uom_qty
+                
+                # Force validation by skipping popup wizards
+                picking.with_context(
+                    skip_miracle_sync=True, 
+                    skip_immediate=True, 
+                    skip_backorder=True
+                ).button_validate()
+                
+            # 2. Automate Invoice Creation and Posting
+            invoice = sale_order.with_context(skip_miracle_sync=True)._create_invoices()
+            if invoice:
+                invoice.with_context(skip_miracle_sync=True).action_post()
+            # --------------------------------
 
-                created_orders.append(sale_order.id)
+            # --- Trigger Background Sync Cron Job ---
+            # 3. Upload delivery to miracle
+            cron_job = self.env.ref('app_miracle_voucher.cron_sync_miracle_deliveries', raise_if_not_found=False)
+            if cron_job:
+                cron_job._trigger()
+            # ---------------------------------------------------
 
-                _logger.info(
-                    f"Created Sale Order {sale_order.name} for company {company.name}"
-                )
+            created_orders.append(sale_order.id)
+
+            _logger.info(
+                f"Created Sale Order {sale_order.name} for company {company.name}"
+            )
 
             # Link + Update State
             record.sale_order_ids = [(6, 0, created_orders)]

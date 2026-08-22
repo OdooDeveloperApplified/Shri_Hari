@@ -322,11 +322,19 @@ class AccountMove(models.Model):
                 if tax:
                     tax_ids.append(tax.id)
 
+            qty1 = item.get('qty1') or 0.0
+            uom = product.uom_id
+            if uom:
+                if uom.uom_type == 'bigger':
+                    qty1 = qty1 / uom.factor_inv
+                elif uom.uom_type == 'smaller' and uom.factor > 0:
+                    qty1 = qty1 * uom.factor
+
             self.env['account.move.line'].create({
                 'move_id': self.id,
                 'product_id': product.id,
                 'name': product.name,
-                'quantity': item.get('qty1'),
+                'quantity': qty1,
                 'price_unit': item.get('rate'),
                 'tax_ids': [(6, 0, tax_ids)],
             })

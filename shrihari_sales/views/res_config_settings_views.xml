@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_shrihari_sales" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.shrihari.sales</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="sale.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//setting[@id='show_margins']" position="after">
+                <setting string="Mobile App Pricelist" help="Select the default pricelist used by the mobile app to fetch tiered slab pricing globally for all users.">
+                    <field name="mobile_app_pricelist_id"/>
+                </setting>
+            </xpath>
+        </field>
+    </record>
+</odoo>
