@@ -6,10 +6,10 @@
     'summary': 'Sales for Shri hari',
     'depends': ['base','sale','stock','sale_stock','contacts'],
     'data': [
-        'security/ir.model.access.csv',
+        # 'security/ir.model.access.csv',
         'data/sequence.xml',
         'views/sales_template_views.xml',
-        'views/captured_sales_views.xml',
+        # 'views/captured_sales_views.xml',
         'views/res_config_settings_views.xml',
 
     ],

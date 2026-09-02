@@ -155,34 +155,35 @@ class ProductAPI(http.Controller):
             # This ensures all 3000+ contacts get the offers automatically.
             pricing_slabs = []
             
-            domain = [
-                '|', ('product_tmpl_id', '=', product.id),
-                     ('product_id', '=', product.product_variant_id.id),
-                ('min_quantity', '>', 1)
-            ]
-            
-            # If a global pricelist is configured in settings, restrict slabs to only that pricelist
+            # If a global pricelist is configured in settings, fetch its slabs.
+            # If empty, do not fetch any slabs (pricing_slabs will be empty).
             if company.mobile_app_pricelist_id:
-                domain.append(('pricelist_id', '=', company.mobile_app_pricelist_id.id))
-            
-            pricelist_items = request.env['product.pricelist.item'].sudo().search(domain, order='min_quantity asc')
-            # _logger.info("this is pricelist iteams %s and its name %s",pricelist_items, pricelist_items.name)
-            
-            for item in pricelist_items:
-                if item.compute_price == 'fixed':
-                    slab_price = item.fixed_price
-                elif item.compute_price == 'percentage':
-                    slab_price = product.list_price * (1 - (item.percent_price / 100.0))
-                else:
-                    slab_price = product.list_price # Fallback
-                    
-                if slab_price > 0:
-                    pricing_slabs.append({
-                        "min_qty": item.min_quantity,
-                        "price": round(slab_price, 2),
-                        "discount_message": f"Buy {int(item.min_quantity)}+ at ₹{round(slab_price, 2)}/box"
-                    })
-                # _logger.info("this are pricing slabs-------> %s",pricing_slabs)
+                domain = [
+                    '|', ('product_tmpl_id', '=', product.id),
+                         ('product_id', '=', product.product_variant_id.id),
+                    ('min_quantity', '>', 1),
+                    ('pricelist_id', '=', company.mobile_app_pricelist_id.id)
+                ]
+                
+                pricelist_items = request.env['product.pricelist.item'].sudo().search(domain, order='min_quantity asc')
+                # _logger.info("this is pricelist iteams %s and its name %s",pricelist_items, pricelist_items.name)
+                
+                currency_symbol = company.currency_id.symbol or ''
+                for item in pricelist_items:
+                    if item.compute_price == 'fixed':
+                        slab_price = item.fixed_price
+                    elif item.compute_price == 'percentage':
+                        slab_price = product.list_price * (1 - (item.percent_price / 100.0))
+                    else:
+                        slab_price = product.list_price # Fallback
+                        
+                    if slab_price > 0:
+                        pricing_slabs.append({
+                            "min_qty": item.min_quantity,
+                            "price": round(slab_price, 2),
+                            "discount_message": f"Buy {int(item.min_quantity)}+ at {currency_symbol}{round(slab_price, 2)}/box"
+                        })
+                    # _logger.info("this are pricing slabs-------> %s",pricing_slabs)
 
             product_list.append({
                 # 'id': product.id,
@@ -331,19 +332,27 @@ class SaleCaptureCreateAPI(http.Controller):
         # Create environment bound to the authenticated user so context (allowed_company_ids) is correct
         user_env = request.env(user=user)
 
-        # CREATE SALE CAPTURE
-        sale_capture = user_env['sale.capture'].sudo().create({
+        # CREATE NATIVE SALE ORDER INSTEAD (Sale Capture commented out)
+        # sale_capture = user_env['sale.capture'].sudo().create({
+        #     'user_id': user.id,
+        #     'customer_id': partner.id,
+        #     'customer_street': partner.street,
+        #     'customer_street2': partner.street2,
+        #     'customer_city': partner.city,
+        #     'customer_zip': partner.zip,
+        #     'customer_country_id': partner.country_id.id,
+        #     'customer_state_id': partner.state_id.id,
+        #     'customer_mobile': partner.mobile,
+        #     'customer_email': partner.email,
+        # })
+
+        sale_order_vals = {
+            'partner_id': partner.id,
             'user_id': user.id,
-            'customer_id': partner.id,
-            'customer_street': partner.street,
-            'customer_street2': partner.street2,
-            'customer_city': partner.city,
-            'customer_zip': partner.zip,
-            'customer_country_id': partner.country_id.id,
-            'customer_state_id': partner.state_id.id,
-            'customer_mobile': partner.mobile,
-            'customer_email': partner.email,
-        })
+            'order_line': []
+        }
+        if user.company_id.mobile_app_pricelist_id:
+            sale_order_vals['pricelist_id'] = user.company_id.mobile_app_pricelist_id.id
 
         # READ ORDER LINES
         order_lines = []
@@ -351,7 +360,7 @@ class SaleCaptureCreateAPI(http.Controller):
 
         while True:
             product_id = kwargs.get(f'line_product_id[{index}]')
-            _logger.info("thissssss is product_id %s",product_id)
+            # _logger.info("thissssss is product_id %s",product_id)
             qty = kwargs.get(f'line_qty[{index}]')
             price = kwargs.get(f'line_price[{index}]')
 
@@ -368,41 +377,102 @@ class SaleCaptureCreateAPI(http.Controller):
                 }), content_type='application/json')
 
             product = user_env['product.product'].sudo().browse(int(product_id))
-            _logger.info("thissss is product %s",product)
+            # _logger.info("thissss is product %s",product)
             if not product.exists():
                 return Response(json.dumps({
                     "success": False,
                     "message": f"Invalid product_id: {product_id}"
                 }), content_type='application/json')
 
-            if not price:
-                price = product.list_price
+            # --- Check Stock Availability ---
+            quants = user_env['stock.quant'].sudo().search([
+                ('product_id', '=', product.id),
+                ('company_id', '=', user.company_id.id),
+                ('location_id.usage', '=', 'internal')
+            ])
+            available_qty = sum(quants.mapped('quantity')) - sum(quants.mapped('reserved_quantity'))
+            
+            if available_qty < qty:
+                return Response(json.dumps({
+                    "success": False,
+                    "message": f"Not enough stock for product {product.display_name}. Available: {available_qty}, Requested: {qty}"
+                }), content_type='application/json')
+            # --------------------------------
 
-            order_lines.append({
-                'capture_id': sale_capture.id,
+            if not price:
+                if user.company_id.mobile_app_pricelist_id:
+                    price = user.company_id.mobile_app_pricelist_id._get_product_price(
+                        product,
+                        qty,
+                        partner=partner
+                    )
+                else:
+                    price = product.list_price
+
+            # order_lines.append({
+            #     'capture_id': sale_capture.id,
+            #     'product_id': product.id,
+            #     'product_uom_qty': qty,
+            #     'price_unit': price,
+            # })
+            
+            sale_order_vals['order_line'].append((0, 0, {
                 'product_id': product.id,
                 'product_uom_qty': qty,
                 'price_unit': price,
-                
-            })
+            }))
 
             index += 1
 
-        if not order_lines:
-            sale_capture.unlink()
+        if not sale_order_vals['order_line']:
+            # sale_capture.unlink()
             return Response(json.dumps({
                 "success": False,
                 "message": "At least one product is required"
             }), content_type='application/json')
 
-        # CREATE LINES
-        user_env['sale.capture.line'].sudo().create(order_lines)
-
-        # CREATE SALE ORDERS
+        # CREATE SALE ORDER NATIVELY (Replacing sale.capture conversion)
+        # user_env['sale.capture.line'].sudo().create(order_lines)
+        # try:
+        #     sale_capture.action_create_sale_orders()
+        # except Exception as e:
+        #     sale_capture.unlink()
+        #     return Response(json.dumps({
+        #         "success": False,
+        #         "message": str(e)
+        #     }), content_type='application/json')
+        
         try:
-            sale_capture.action_create_sale_orders()
+            # Create the Sale Order and skip immediate Miracle sync (handled later)
+            sale_order = user_env['sale.order'].sudo().with_context(skip_miracle_sync=True).create(sale_order_vals)
+            
+            # Automatically confirm the Quotation into a Sales Order to generate the Delivery
+            sale_order.action_confirm()
+
+            # 1. Automate Delivery Validation
+            for picking in sale_order.picking_ids:
+                picking.with_context(skip_miracle_sync=True).action_assign()
+                for move_line in picking.move_ids:
+                    move_line.quantity = move_line.product_uom_qty
+                
+                # Force validation by skipping popup wizards
+                picking.with_context(
+                    skip_miracle_sync=True, 
+                    skip_immediate=True, 
+                    skip_backorder=True
+                ).button_validate()
+                
+            # 2. Automate Invoice Creation and Posting
+            invoice = sale_order.with_context(skip_miracle_sync=True)._create_invoices()
+            if invoice:
+                invoice.with_context(skip_miracle_sync=True).action_post()
+
+            # 3. Trigger Background Sync Cron Job (Upload delivery to miracle)
+            cron_job = request.env.ref('app_miracle_voucher.cron_sync_miracle_deliveries', raise_if_not_found=False)
+            if cron_job:
+                cron_job.sudo()._trigger()
+            
         except Exception as e:
-            sale_capture.unlink()
             return Response(json.dumps({
                 "success": False,
                 "message": str(e)
@@ -410,22 +480,22 @@ class SaleCaptureCreateAPI(http.Controller):
 
         # RESPONSE
         sale_orders = []
-        for so in sale_capture.sale_order_ids:
-            sale_orders.append({
-                "id": so.id,
-                "name": so.name,
-                "company": so.company_id.name,
-                "amount_total": so.amount_total
-            })
+        # for so in sale_capture.sale_order_ids:
+        sale_orders.append({
+            "id": sale_order.id,
+            "name": sale_order.name,
+            "company": sale_order.company_id.name,
+            "amount_total": sale_order.amount_total
+        })
 
         return Response(json.dumps({
             "success": True,
-            "message": "Sale Capture created successfully",
+            "message": "Order created successfully",
             "customer_id": partner.id,
             "customer_name": partner.name,
-            "sale_capture_id": sale_capture.id,
-            "reference": sale_capture.name,
-            "state": sale_capture.state,
+            "sale_capture_id": sale_order.id, # Using SO id directly
+            "reference": sale_order.name, # Using SO name directly
+            "state": sale_order.state,
             "sale_orders": sale_orders
         }), content_type='application/json')
 
@@ -441,21 +511,29 @@ class SaleCaptureListAPI(http.Controller):
 
         base_url = request.httprequest.host_url.rstrip('/')
 
-        sale_captures = request.env['sale.capture'].sudo().search([], order='id desc')
+        # sale_captures = request.env['sale.capture'].sudo().search([], order='id desc')
+        # if not sale_captures:
+        #     return Response(json.dumps({
+        #         "success": False,
+        #         "message": "No Sale Capture records found"
+        #     }), content_type='application/json')
 
-        if not sale_captures:
+        sale_orders = request.env['sale.order'].sudo().search([('user_id', '=', user.id)], order='id desc')
+        if not sale_orders:
             return Response(json.dumps({
                 "success": False,
-                "message": "No Sale Capture records found"
+                "message": "No orders found"
             }), content_type='application/json')
 
         result = []
 
-        for record in sale_captures:
+        # for record in sale_captures:
+        for record in sale_orders:
 
             # Prepare lines
             lines = []
-            for line in record.line_ids:
+            # for line in record.line_ids:
+            for line in record.order_line:
                 lines.append({
                     "product_id": line.product_id.id,
                     "product_name": line.product_id.name,
@@ -465,30 +543,13 @@ class SaleCaptureListAPI(http.Controller):
                     "image_url": f"{base_url}/web/image/product.template/{line.product_id.id}/image_1920??t={int(datetime.now().timestamp())}"
                 })
 
-            # Group Sale Orders company-wise
-            # company_wise_orders = {}
-
-            # for so in record.sale_order_ids:
-            #     company_name = so.company_id.name
-
-            #     if company_name not in company_wise_orders:
-            #         company_wise_orders[company_name] = []
-
-            #     company_wise_orders[company_name].append({
-            #         "sale_order_id": so.id,
-            #         "sale_order_name": so.name,
-            #         "amount_total": so.amount_total,
-            #         "state": so.state
-            #     })
-
             result.append({
-                "sale_capture_id": record.id,
+                "sale_capture_id": record.id, # Using SO id directly to maintain app compatibility
                 "reference": record.name,
-                "customer": record.customer_id.name,
-                "capture_date": str(record.capture_date),
+                "customer": record.partner_id.name,
+                "capture_date": str(record.date_order),
                 "state": record.state,
                 "lines": lines,
-                # "company_wise_sale_orders": company_wise_orders
             })
 
         return Response(json.dumps({
@@ -517,59 +578,43 @@ class SaleCaptureSaleOrderAPI(http.Controller):
                 "message": "sale_capture_id is required"
             }), content_type='application/json')
 
-        sale_capture = request.env['sale.capture'].sudo().browse(int(sale_capture_id))
+        # sale_capture = request.env['sale.capture'].sudo().browse(int(sale_capture_id))
+        so = request.env['sale.order'].sudo().browse(int(sale_capture_id))
 
-        if not sale_capture.exists():
+        if not so.exists():
             return Response(json.dumps({
                 "success": False,
-                "message": "Invalid sale_capture_id"
+                "message": "Invalid sale_capture_id (Order not found)"
             }), content_type='application/json')
 
-        # (Optional) Restrict user access — if needed
-        # if sale_capture.create_uid.id != user.id:
-        #     return Response(json.dumps({
-        #         "success": False,
-        #         "message": "You are not authorized to view this record"
-        #     }), content_type='application/json')
-
-        if not sale_capture.sale_order_ids:
-            return Response(json.dumps({
-                "success": True,
-                "message": "No Sale Orders found for this Sale Capture",
-                "data": []
-            }), content_type='application/json')
-
-        # Group Sale Orders company-wise
+        # Group Sale Orders company-wise (mimicking old structure)
         company_wise_orders = {}
+        company_name = so.company_id.name
 
-        for so in sale_capture.sale_order_ids:
-            company_name = so.company_id.name
+        if company_name not in company_wise_orders:
+            company_wise_orders[company_name] = []
 
-            if company_name not in company_wise_orders:
-                company_wise_orders[company_name] = []
-
-            company_wise_orders[company_name].append({
-                "sale_order_id": so.id,
-                "sale_order_name": so.name,
-                "amount_total": so.amount_total,
-                "state": so.state,
-                "date_order": str(so.date_order),
-                # Code to show product image on App captured sale order
-                "products": [
-                    {
-                        "product_id": line.product_id.id,
-                        "product_name": line.product_id.name,
-                        "image_url": f"{base_url}/web/image/product.template/{line.product_id.id}/image_1920??t={int(datetime.now().timestamp())}"
-                    }
-                    for line in so.order_line
-                ]
-            })
+        company_wise_orders[company_name].append({
+            "sale_order_id": so.id,
+            "sale_order_name": so.name,
+            "amount_total": so.amount_total,
+            "state": so.state,
+            "date_order": str(so.date_order),
+            "products": [
+                {
+                    "product_id": line.product_id.id,
+                    "product_name": line.product_id.name,
+                    "image_url": f"{base_url}/web/image/product.template/{line.product_id.id}/image_1920??t={int(datetime.now().timestamp())}"
+                }
+                for line in so.order_line
+            ]
+        })
 
         return Response(json.dumps({
             "success": True,
-            "sale_capture_id": sale_capture.id,
-            "reference": sale_capture.name,
-            "customer": sale_capture.customer_id.name,
+            "sale_capture_id": so.id,
+            "reference": so.name,
+            "customer": so.partner_id.name,
             "company_wise_sale_orders": company_wise_orders
         }), content_type='application/json')
 
@@ -655,14 +700,8 @@ class SaleCaptureSaleOrderLineAPI(http.Controller):
             return error_response
         
         base_url = request.httprequest.host_url.rstrip('/')
-        sale_capture_id = kwargs.get('sale_capture_id')
-        sale_order_id = kwargs.get('sale_order_id')
-
-        if not sale_capture_id:
-            return Response(json.dumps({
-                "success": False,
-                "message": "sale_capture_id is required"
-            }), content_type='application/json')
+        # sale_capture_id = kwargs.get('sale_capture_id')
+        sale_order_id = kwargs.get('sale_order_id') or kwargs.get('sale_capture_id')
 
         if not sale_order_id:
             return Response(json.dumps({
@@ -670,21 +709,13 @@ class SaleCaptureSaleOrderLineAPI(http.Controller):
                 "message": "sale_order_id is required"
             }), content_type='application/json')
 
-        sale_capture = request.env['sale.capture'].sudo().browse(int(sale_capture_id))
-
-        if not sale_capture.exists():
-            return Response(json.dumps({
-                "success": False,
-                "message": "Invalid sale_capture_id"
-            }), content_type='application/json')
-
         # Filter specific Sale Order
         sale_order = request.env['sale.order'].sudo().browse(int(sale_order_id))
 
-        if not sale_order.exists() or sale_order not in sale_capture.sale_order_ids:
+        if not sale_order.exists():
             return Response(json.dumps({
                 "success": False,
-                "message": "Sale Order not found for given Sale Capture"
+                "message": "Sale Order not found"
             }), content_type='application/json')
 
         # Prepare order lines
@@ -703,9 +734,9 @@ class SaleCaptureSaleOrderLineAPI(http.Controller):
         # Response (single SO instead of company-wise grouping)
         return Response(json.dumps({
             "success": True,
-            "sale_capture_id": sale_capture.id,
-            "reference": sale_capture.name,
-            "customer": sale_capture.customer_id.name,
+            "sale_capture_id": sale_order.id, # Fallback mapping
+            "reference": sale_order.name,
+            "customer": sale_order.partner_id.name,
             "sale_order": {
                 "sale_order_id": sale_order.id,
                 "sale_order_name": sale_order.name,
@@ -810,11 +841,11 @@ class MiracleCredentialAPI(http.Controller):
             "id": company.id,
             "name": company.name,
             "icon": "business",
+            "MIRACLE_BASE_URL": company.miracle_base_url or "",
+            "URL_KEY": company.miracle_urlkey or "",
             "CLIENT_ID": company.miracle_clientid or "",
             "API_KEY": company.miracle_apikey or "",
-            "ACCID": partner.miracle_account_id or "",
-            "MIRACLE_BASE_URL": company.miracle_base_url or "",
-            "URL_KEY": company.miracle_urlkey or ""
+            "ACCID": partner.miracle_account_id or ""
         }]
 
         return Response(json.dumps({

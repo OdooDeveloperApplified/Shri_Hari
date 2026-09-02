@@ -37,6 +37,11 @@
                 </page>
             </xpath>
 
+            <!-- Insert miracle_cart_rate after Sale Price -->
+            <xpath expr="//field[@name='list_price']/.." position="after">
+                <field name="miracle_cart_rate" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+            </xpath>
+
         </field>
     </record>
 

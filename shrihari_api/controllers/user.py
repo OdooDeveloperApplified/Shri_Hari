@@ -111,7 +111,7 @@ class UserController(http.Controller):
                 }
                 request.env['partner.api.key'].sudo().create(access_token_dict)
 
-            partner = user.partner_id
+            partner = user.partner_id.with_company(user.company_id)
 
             # If no exception, login is successful
             return Response(json.dumps({
@@ -120,22 +120,22 @@ class UserController(http.Controller):
                 'user_id': user.id,
                 'name': user.name,
                 'email': user.login,
-                # 'role': employee.job_id.name,
-                # 'employee': employee_data,
                 'access_token': token,
-
                 'customer': {
-                'partner_id': partner.id,
-                'name': partner.name,
-                'miracle_account_id': partner.miracle_account_id,
-                'mobile': partner.mobile,
-                'email': partner.email,
-                'street': partner.street,
-                'street2': partner.street2,
-                'city': partner.city,
-                'zip': partner.zip,
-                'state': partner.state_id.name if partner.state_id else None,
-                'country': partner.country_id.name if partner.country_id else None,}
+                    'partner_id': partner.id,
+                    'name': partner.name,
+                    'miracle_account_id': partner.miracle_account_id,
+                    'mobile': partner.mobile,
+                    'email': partner.email,
+                    'street': partner.street,
+                    'street2': partner.street2,
+                    'city': partner.city,
+                    'zip': partner.zip,
+                    'state': partner.state_id.name if partner.state_id else None,
+                    'country': partner.country_id.name if partner.country_id else None,
+                    'credit_limit': partner.credit_limit,
+                    'crdays': int(''.join(filter(str.isdigit, partner.property_payment_term_id.name or "0")) or 0)
+                }
             }), content_type='application/json')
 
         except Exception as e:

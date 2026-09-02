@@ -15,6 +15,7 @@ class ProductTemplate(models.Model):
     is_miracle_product = fields.Boolean("Is Miracle Product ?", readonly=True)
     miracle_source_company_id = fields.Many2one('res.company',string='Miracle Source Company',readonly=True,copy=False)
     miracle_group_id = fields.Many2one('miracle.product.group', string="Miracle Group")
+    miracle_cart_rate = fields.Float(string="Miracle Cart Rate", readonly=True)
 
     def _get_miracle_group_id(self, grpnm):
         if not grpnm:

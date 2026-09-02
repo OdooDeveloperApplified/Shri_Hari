@@ -93,29 +93,29 @@ class SaleCapture(models.Model):
             sale_order = SaleOrder.with_company(company).with_context(skip_miracle_sync=True).create(order_vals)
 
             # 1. Automate Delivery Validation
-            for picking in sale_order.picking_ids:
-                picking.with_context(skip_miracle_sync=True).action_assign()
-                for move_line in picking.move_ids:
-                    move_line.quantity = move_line.product_uom_qty
+            # for picking in sale_order.picking_ids:
+            #     picking.with_context(skip_miracle_sync=True).action_assign()
+            #     for move_line in picking.move_ids:
+            #         move_line.quantity = move_line.product_uom_qty
                 
-                # Force validation by skipping popup wizards
-                picking.with_context(
-                    skip_miracle_sync=True, 
-                    skip_immediate=True, 
-                    skip_backorder=True
-                ).button_validate()
+            #     # Force validation by skipping popup wizards
+            #     picking.with_context(
+            #         skip_miracle_sync=True, 
+            #         skip_immediate=True, 
+            #         skip_backorder=True
+            #     ).button_validate()
                 
             # 2. Automate Invoice Creation and Posting
-            invoice = sale_order.with_context(skip_miracle_sync=True)._create_invoices()
-            if invoice:
-                invoice.with_context(skip_miracle_sync=True).action_post()
+            # invoice = sale_order.with_context(skip_miracle_sync=True)._create_invoices()
+            # if invoice:
+            #     invoice.with_context(skip_miracle_sync=True).action_post()
             # --------------------------------
 
             # --- Trigger Background Sync Cron Job ---
             # 3. Upload delivery to miracle
-            cron_job = self.env.ref('app_miracle_voucher.cron_sync_miracle_deliveries', raise_if_not_found=False)
-            if cron_job:
-                cron_job._trigger()
+            # cron_job = self.env.ref('app_miracle_voucher.cron_sync_miracle_deliveries', raise_if_not_found=False)
+            # if cron_job:
+            #     cron_job._trigger()
             # ---------------------------------------------------
 
             created_orders.append(sale_order.id)
