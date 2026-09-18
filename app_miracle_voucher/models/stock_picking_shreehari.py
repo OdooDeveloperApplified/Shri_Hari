@@ -1,5 +1,6 @@
 from odoo import fields, models
 import logging
+import json
 _logger = logging.getLogger(__name__)
 
 class StockPicking(models.Model):
@@ -20,6 +21,7 @@ class StockPicking(models.Model):
             action_type = "A"
 
         if not self.partner_id.miracle_account_id:
+            _logger.error(f"Upload failed: Partner {self.partner_id.name} not synced with Miracle")
             return company.miracle_notification(
                 "Partner not synced with Miracle",
                 "danger"
@@ -34,6 +36,7 @@ class StockPicking(models.Model):
                 continue
 
             if not move.product_id.miracle_product_id:
+                _logger.error(f"Upload failed: Product {move.product_id.display_name} not synced with Miracle")
                 return company.miracle_notification(
                     f"Product {move.product_id.display_name} not synced with Miracle",
                     "danger"
@@ -57,15 +60,12 @@ class StockPicking(models.Model):
 
             amount = qty * rate
 
-            # Shared with app_miracle_product/shrihari_sales - single
-            # implementation of the box/piece UOM ratio, not a fourth copy
-            # of the same bigger/smaller factor logic.
-            ratio = self.env['product.template']._get_miracle_pack_size(move.product_id.uom_id)
-
-            # UCRATE = per-piece rate for this challan line (sales challan
-            # rate), derived from the box-level `rate` the same way
-            # Miracle Single PC Rate is derived from list_price elsewhere.
-            ucrate = (rate / ratio) if ratio else rate
+            uom = move.product_id.uom_id
+            ratio = 1.0
+            if uom.uom_type == 'bigger':
+                ratio = uom.factor_inv
+            elif uom.uom_type == 'smaller' and uom.factor > 0:
+                ratio = 1.0 / uom.factor
 
             # _logger.info("Product: %s | Qty: %s | Rate: %s", move.product_id.display_name, qty, rate)
 
@@ -79,51 +79,29 @@ class StockPicking(models.Model):
             # ==========================
             if lot_lines:
                 for ml in lot_lines:
-                    item_dict = {
+                    items.append({
                         "prd": move.product_id.miracle_product_id,
                         "seqno": len(items) + 1,
-                        "batchnm": ml.lot_id.name,
-                        "locnm": "",
                         "qty1": ml.quantity * ratio,
                         "qty2": ml.quantity,
-                        "qty3": 0.0,
-                        "qty4": 0.0,
-                        "qty5": 0.0,
                         "txpaidrt": 0,
                         "rate": rate,
                         "amt": ml.quantity * rate,
-                    }
-                    if self.picking_type_id.code == "outgoing":
-                        item_dict["ufddet"] = {
-                            "UBOX": 0,
-                            "UDESC": "",
-                            # "UCRATE": ucrate
-                        }
-                    items.append(item_dict)
+                        "batchnm": ml.lot_id.name,
+                    })
             else:
-                item_dict = {
+                items.append({
                     "prd": move.product_id.miracle_product_id,
                     "seqno": len(items) + 1,
-                    "batchnm": "",
-                    "locnm": "",
                     "qty1": qty * ratio,
                     "qty2": qty,
-                    "qty3": 0.0,
-                    "qty4": 0.0,
-                    "qty5": 0.0,
                     "txpaidrt": 0,
                     "rate": rate,
                     "amt": amount,
-                }
-                if self.picking_type_id.code == "outgoing":
-                    item_dict["ufddet"] = {
-                        "UBOX": 0,
-                        "UDESC": "",
-                        # "UCRATE": ucrate
-                    }
-                items.append(item_dict)
+                })
 
         if not order:
+            _logger.error(f"Upload failed: Source order not found for picking {self.name}")
             return company.miracle_notification(
                 f"Source order not found for picking {self.name}",
                 "danger"
@@ -134,15 +112,10 @@ class StockPicking(models.Model):
             "acc": self.partner_id.miracle_account_id,
             "billamt": order.amount_total,
             "flgcd": "D",
-            "narr": "",
-            "invtyp": "GST" if self.partner_id.state_id == self.company_id.state_id else "IGST",
-            # "invtyp": "1. GST" if self.partner_id.state_id == self.company_id.state_id else "2. IGST",
+            "invtyp": "1. GST" if self.partner_id.state_id == self.company_id.state_id else "2. IGST",
             "taxtyp": "T",
-            "docdt": "",
-            "docno": "",
             "items": items
         }
-        _logger.info("this is payload %s", payload)
 
         if self.picking_type_id.code == "outgoing":
             payload.update({
@@ -161,6 +134,7 @@ class StockPicking(models.Model):
             })
 
         else:
+            _logger.error(f"Upload failed: Unsupported picking type {self.picking_type_id.code}")
             return company.miracle_notification(
                 "Unsupported picking type",
                 "danger"
@@ -169,8 +143,9 @@ class StockPicking(models.Model):
         if action_type == "E":
             payload['uniqueId'] = self.miracle_voucher_id
 
-        _logger.info("MIRACLE PAYLOAD = %s", payload)
+        _logger.info("========== MIRACLE PAYLOAD ==========\n%s",json.dumps(payload, indent=4, default=str))
         response = company._action_send_voucher_to_miracle(payload)
+        _logger.info("========== MIRACLE RESPONSE ==========\n%s",json.dumps(response, indent=4, default=str))
 
         if response.get("IsError"):
             return company.miracle_notification(

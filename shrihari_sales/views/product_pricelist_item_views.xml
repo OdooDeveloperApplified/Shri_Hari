@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="product_pricelist_item_form_view_mobile_box_price" model="ir.ui.view">
+        <field name="name">product.pricelist.item.form.mobile.box.price</field>
+        <field name="model">product.pricelist.item</field>
+        <field name="inherit_id" ref="product.product_pricelist_item_form_view"/>
+        <field name="arch" type="xml">
+            <group name="pricelist_rule_limits" position="inside">
+                <field name="mobile_box_price"
+                       widget="monetary"
+                       options="{'currency_field': 'currency_id'}"/>
+            </group>
+        </field>
+    </record>
+</odoo>

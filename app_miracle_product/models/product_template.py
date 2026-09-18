@@ -9,13 +9,14 @@ _logger = logging.getLogger(__name__)
 class ProductTemplate(models.Model):
     _inherit = "product.template"
 
-    miracle_product_id = fields.Char("Miracle Product ID", readonly=True)
+    miracle_product_id = fields.Char("Miracle Product ID")
     miracle_tax_string = fields.Char("Miracle Tax String", compute="_compute_miracle_tax_string")
     miracle_commodity_name = fields.Char("Miracle Commodity Name", readonly=True)
-    is_miracle_product = fields.Boolean("Is Miracle Product ?", readonly=True)
+    is_miracle_product = fields.Boolean("Is Miracle Product ?")
     miracle_source_company_id = fields.Many2one('res.company',string='Miracle Source Company',readonly=True,copy=False)
     miracle_group_id = fields.Many2one('miracle.product.group', string="Miracle Group")
-    miracle_cart_rate = fields.Float(string="Miracle Cart Rate", readonly=True)
+    miracle_single_pc_rate = fields.Float(string="Miracle Single PC Rate")
+    miracle_mrp = fields.Float(string="Miracle MRP")
 
     def _get_miracle_group_id(self, grpnm):
         if not grpnm:
@@ -116,6 +117,84 @@ class ProductTemplate(models.Model):
 
         uom = Uom.create(vals)
         return uom.id
+
+    @staticmethod
+    def _get_miracle_pack_size(uom):
+        """How many single pieces make up one unit of `uom` (e.g. 72 for a
+        box UOM created with factor_inv=72). Falls back to 1 for the
+        reference unit itself or an unmapped UOM."""
+        if not uom:
+            return 1.0
+        if uom.uom_type == 'bigger' and uom.factor_inv:
+            return uom.factor_inv
+        if uom.uom_type == 'smaller' and uom.factor:
+            return 1.0 / uom.factor
+        return 1.0
+
+    def _build_miracle_sync_vals(self, data):
+        """Shared vals-builder for the single-product Miracle payload (the
+        one carrying `ufddet`), used by both action_sync_from_miracle() and
+        action_bulk_sync_miracle() so the two never drift apart.
+        """
+        tax_string = data.get('slabnm')
+        uom_string = data.get('uomnm')
+        ufddet = data.get('ufddet') or {}
+
+        sale_tax_ids = self._get_miracle_tax_ids(tax_string, 'sale')
+        purchase_tax_ids = self._get_miracle_tax_ids(tax_string, 'purchase')
+
+        vals = {
+            'name': data.get('prdnm'),
+            'l10n_in_hsn_code': data.get('hsncode'),
+            'standard_price': data.get('purrate'),
+            'miracle_tax_string': tax_string,
+            'miracle_commodity_name': data.get('commnm'),
+        }
+
+        if data.get('grpnm'):
+            vals['miracle_group_id'] = self._get_miracle_group_id(data.get('grpnm'))
+
+        if data.get('catnm'):
+            categ_id = self._get_miracle_category_id(data.get('catnm'))
+            if categ_id:
+                vals['categ_id'] = categ_id
+
+        # Resolve/keep the pack-size UOM first, since the sale price
+        # calculation below needs the *new* UOM's ratio, not the one
+        # already stored on the record.
+        target_uom = self.uom_id
+        if uom_string:
+            uom_id = self._get_miracle_uom_id(uom_string)
+            if uom_id:
+                vals['uom_id'] = uom_id
+                vals['uom_po_id'] = uom_id
+                target_uom = self.env['uom.uom'].browse(uom_id)
+
+        # Per-piece rate (UCARTRAT) and per-piece MRP (UMRP), only present
+        # on the single-product payload (not the bulk ProductLedger report).
+        single_pc_rate = ufddet.get('UCARTRAT')
+        mrp = ufddet.get('UMRP')
+
+        if single_pc_rate is not None:
+            vals['miracle_single_pc_rate'] = single_pc_rate
+        if mrp is not None:
+            vals['miracle_mrp'] = mrp
+
+        if single_pc_rate:
+            pack_size = self._get_miracle_pack_size(target_uom)
+            vals['list_price'] = pack_size * single_pc_rate
+        else:
+            # No per-piece rate on this payload — fall back to Miracle's
+            # own box-level rate rather than leaving the price untouched.
+            vals['list_price'] = data.get('salrate')
+
+        if sale_tax_ids:
+            vals['taxes_id'] = [(6, 0, sale_tax_ids)]
+
+        if purchase_tax_ids:
+            vals['supplier_taxes_id'] = [(6, 0, purchase_tax_ids)]
+
+        return vals
 
     @api.depends('taxes_id', 'supplier_taxes_id')
     def _compute_miracle_tax_string(self):
@@ -517,6 +596,34 @@ class ProductTemplate(models.Model):
 
         return build_notification(0)
 
+    def action_recalculate_sale_price(self):
+        """Recompute Sales Price = pack size x Miracle Single PC Rate using
+        whatever is already stored on the record - no Miracle API call.
+        Lets someone fix pricing on demand (e.g. after manually editing
+        Miracle Single PC Rate) without needing a full re-sync.
+        """
+        company = self.env.company
+        updated = 0
+        skipped = []
+
+        for product in self:
+            if not product.miracle_single_pc_rate:
+                skipped.append(product.display_name)
+                continue
+
+            pack_size = product._get_miracle_pack_size(product.uom_id)
+            product.list_price = pack_size * product.miracle_single_pc_rate
+            updated += 1
+
+        message = f"Recalculated sale price for {updated} product(s)."
+        if skipped:
+            message += f" Skipped {len(skipped)} product(s) with no Miracle Single PC Rate set."
+
+        return company.miracle_notification(
+            message,
+            "success" if updated else "warning"
+        )
+
     def action_sync_from_miracle(self, api_response=None):
         self.ensure_one()
         company = self.env.company
@@ -545,42 +652,8 @@ class ProductTemplate(models.Model):
 
         if not data:
             raise UserError("Product not found in Miracle.")
-        
-        tax_string = data.get('slabnm')
-        uom_string = data.get('uomnm')
 
-        sale_tax_ids = self._get_miracle_tax_ids(tax_string, 'sale')
-        purchase_tax_ids = self._get_miracle_tax_ids(tax_string, 'purchase')
-
-        vals = {
-            'name': data.get('prdnm'),
-            'l10n_in_hsn_code': data.get('hsncode'),
-            'list_price': data.get('salrate'),
-            'standard_price': data.get('purrate'),
-            'miracle_tax_string': tax_string,
-            'miracle_commodity_name': data.get('commnm'),
-        }
-
-        if data.get('grpnm'):
-            vals['miracle_group_id'] = self._get_miracle_group_id(data.get('grpnm'))
-            
-        if data.get('catnm'):
-            categ_id = self._get_miracle_category_id(data.get('catnm'))
-            if categ_id:
-                vals['categ_id'] = categ_id
-
-        if uom_string:
-            uom_id = self._get_miracle_uom_id(uom_string)
-            if uom_id:
-                vals['uom_id'] = uom_id
-                vals['uom_po_id'] = uom_id
-
-        if sale_tax_ids:
-            vals['taxes_id'] = [(6, 0, sale_tax_ids)]
-
-        if purchase_tax_ids:
-            vals['supplier_taxes_id'] = [(6, 0, purchase_tax_ids)]
-
+        vals = self._build_miracle_sync_vals(data)
         self.write(vals)
 
         return company.miracle_notification(
@@ -610,42 +683,8 @@ class ProductTemplate(models.Model):
             data = response.get("DataModel")
             if not data:
                 continue
-            
-            tax_string = data.get('slabnm')
-            uom_string = data.get('uomnm')
 
-            sale_tax_ids = product._get_miracle_tax_ids(tax_string, 'sale')
-            purchase_tax_ids = product._get_miracle_tax_ids(tax_string, 'purchase')
-
-            vals = {
-                'name': data.get('prdnm'),
-                'l10n_in_hsn_code': data.get('hsncode'),
-                'list_price': data.get('salrate'),
-                'standard_price': data.get('purrate'),
-                'miracle_tax_string': tax_string,
-                'miracle_commodity_name': data.get('commnm'),
-            }
-
-            if data.get('grpnm'):
-                vals['miracle_group_id'] = product._get_miracle_group_id(data.get('grpnm'))
-                
-            if data.get('catnm'):
-                categ_id = product._get_miracle_category_id(data.get('catnm'))
-                if categ_id:
-                    vals['categ_id'] = categ_id
-
-            if uom_string:
-                uom_id = product._get_miracle_uom_id(uom_string)
-                if uom_id:
-                    vals['uom_id'] = uom_id
-                    vals['uom_po_id'] = uom_id
-
-            if sale_tax_ids:
-                vals['taxes_id'] = [(6, 0, sale_tax_ids)]
-
-            if purchase_tax_ids:
-                vals['supplier_taxes_id'] = [(6, 0, purchase_tax_ids)]
-
+            vals = product._build_miracle_sync_vals(data)
             product.write(vals)
             total_synced += 1
 

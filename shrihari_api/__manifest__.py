@@ -4,10 +4,11 @@
     'author': 'Applified',
     'website': 'https://www.applified.in',
     'summary': 'API for Shri hari',
-    'depends': ['base','sale','stock','sale_stock','contacts','app_miracle_account'],
+    'depends': ['base','sale','stock','sale_stock','contacts','app_miracle_auth','app_miracle_account','shrihari_sales'],
     'data': [
         'security/ir.model.access.csv',
         'views/api_access_token.xml',
+        'views/res_company.xml',
     ],
     'license': 'LGPL-3',
     'installable': True,

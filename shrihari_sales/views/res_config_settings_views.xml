@@ -9,6 +9,9 @@
                 <setting string="Mobile App Pricelist" help="Select the default pricelist used by the mobile app to fetch tiered slab pricing globally for all users.">
                     <field name="mobile_app_pricelist_id"/>
                 </setting>
+                <setting string="Mobile App Freight &amp; Transport Charge" help="Added as an extra line on every sale order placed from the mobile app. Quantity = number of product lines in the order, price = this product's Sales Price.">
+                    <field name="mobile_freight_product_id"/>
+                </setting>
             </xpath>
         </field>
     </record>

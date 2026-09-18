@@ -8,3 +8,8 @@ class ResConfigSettings(models.TransientModel):
         readonly=False,
         string="Mobile App Global Pricelist"
     )
+    mobile_freight_product_id = fields.Many2one(
+        related='company_id.mobile_freight_product_id',
+        readonly=False,
+        string="Mobile App Freight & Transport Charge Product"
+    )

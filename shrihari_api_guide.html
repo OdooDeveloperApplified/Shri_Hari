@@ -1,0 +1,542 @@
+<title>Shri Hari App API — Integration Guide v1.0</title>
+<style>
+:root{
+  --ink:#1E1B3A; --primary:#4A3F87; --primary-mid:#6C5AC0; --accent:#D9A32B;
+  --teal-wash:#EEEBF9; --teal-line:#D9D3EF; --head-fill:#241F52;
+  --code-bg:#14112B; --code-fg:#E3E0F5; --c-cmt:#7A749C; --c-key:#B6A6F2;
+  --c-str:#F0C77E; --c-num:#7FC8EA; --c-kw:#F08F6E; --c-pun:#948DB8;
+  --ok:#2C7A52; --ok-bg:#E2F2E8; --err:#B23B3B; --err-bg:#FAE7E7;
+  --warn:#A8790F; --warn-bg:#FAF1DA; --info-bg:#EEEBF9;
+  --bg:#F8F7FC; --surface:#FFFFFF; --text:#231F3D; --muted:#675F87; --zebra:#F3F1FA;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.65}
+.wrap{display:flex;min-height:100vh}
+
+/* SIDEBAR */
+.side{width:300px;min-width:300px;background:var(--ink);color:#C9C3E8;position:sticky;top:0;height:100vh;overflow-y:auto;display:flex;flex-direction:column}
+.side::-webkit-scrollbar{width:7px}.side::-webkit-scrollbar-thumb{background:#3A3268;border-radius:4px}
+.brand{padding:26px 22px 18px;border-bottom:1px solid rgba(255,255,255,.08)}
+.brand .nm{font-size:16px;font-weight:800;color:#fff;letter-spacing:.01em}
+.brand .sub{font-size:11px;color:#9088BE;margin-top:3px;letter-spacing:.04em}
+.brand .ver{display:inline-block;margin-top:11px;background:var(--accent);color:#fff;font-size:10px;font-weight:700;padding:3px 10px;border-radius:11px;letter-spacing:.05em}
+.nav{padding:12px 0 30px;flex:1}
+.nav-g{margin-bottom:6px}
+.nav-gl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.14em;color:var(--accent);padding:14px 22px 5px}
+.nav-l{display:flex;align-items:center;gap:9px;padding:8px 22px;color:#B3ABDA;text-decoration:none;font-size:13px;border-left:3px solid transparent;transition:.13s}
+.nav-l:hover{background:rgba(255,255,255,.05);color:#fff}
+.nav-l.active{background:rgba(108,90,192,.28);color:#fff;border-left-color:var(--accent)}
+.nav-num{font-size:11px;color:#8C84B5;min-width:20px;font-family:Consolas,monospace}
+.nav-tx{flex:1}
+.mb{font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:.04em}
+.mb-get{background:rgba(108,90,192,.4);color:#C8BEF5}
+.mb-post{background:rgba(45,164,78,.25);color:#7FD49B}
+
+/* MAIN */
+.main{flex:1;max-width:1000px;padding:0 52px 90px}
+.cover{background:linear-gradient(135deg,var(--ink) 0%,#140F2E 55%,#2B2158 100%);margin:0 -52px 0;padding:74px 52px 60px;color:#fff;position:relative;overflow:hidden;border-bottom:4px solid var(--accent)}
+.cover::after{content:"";position:absolute;top:-40%;right:-10%;width:480px;height:480px;background:radial-gradient(circle,rgba(108,90,192,.35) 0%,transparent 65%)}
+.cover-in{position:relative;z-index:1}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:14px}
+.cover h1{font-size:42px;font-weight:800;line-height:1.08;margin-bottom:8px}
+.cover h1 span{color:#C4B5F5}
+.cover .tag{font-size:17px;color:#B0A6D6;margin-bottom:30px;font-style:italic}
+.meta{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;max-width:560px}
+.meta-i{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:9px;padding:12px 16px}
+.meta-l{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#8C84B5;margin-bottom:3px}
+.meta-v{font-size:13px;color:#fff;font-weight:500}
+.meta-v.mono{font-family:Consolas,monospace;font-size:12px;color:#C4B5F5}
+
+/* SECTIONS */
+.sec{padding:46px 0 8px;border-bottom:1px solid var(--teal-line)}
+.sec:last-child{border-bottom:none}
+.sec-h{display:flex;align-items:center;gap:14px;margin-bottom:20px;background:var(--ink);margin-left:-18px;padding:11px 18px;border-radius:7px;border-left:5px solid var(--accent)}
+.sec-n{font-family:Consolas,monospace;font-size:14px;font-weight:700;color:#fff;background:rgba(255,255,255,.12);min-width:34px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:6px}
+.sec-h h1{font-size:23px;font-weight:700;color:#fff}
+h2{font-size:19px;font-weight:700;color:var(--primary);margin:30px 0 12px;padding-bottom:7px;border-bottom:2px solid var(--primary-mid)}
+h3{font-size:14.5px;font-weight:700;color:var(--primary-mid);margin:24px 0 9px}
+p{margin-bottom:11px}
+.lead{font-size:15.5px;color:var(--muted);font-style:italic;margin:6px 0 16px}
+code{font-family:Consolas,'Courier New',monospace;font-size:12.5px;background:var(--teal-wash);color:var(--accent);padding:1px 6px;border-radius:4px}
+ul.bul,ol.steps{margin:8px 0 14px 6px;padding-left:22px}
+ul.bul li,ol.steps li{margin-bottom:6px}
+ol.steps li{padding-left:4px}
+ul.bul li::marker{color:var(--accent)}
+ol.steps li::marker{color:var(--primary);font-weight:700}
+
+/* ENDPOINT */
+.ep{display:flex;align-items:stretch;margin:14px 0 18px;border-radius:8px;overflow:hidden;border:1px solid var(--teal-line)}
+.ep-m{font-weight:700;font-size:12px;color:#fff;padding:11px 18px;display:flex;align-items:center;letter-spacing:.05em}
+.ep-post{background:var(--ok)}.ep-get{background:var(--primary-mid)}.ep-base{background:var(--accent)}
+.ep-u{flex:1;background:var(--code-bg);color:var(--c-key);font-family:Consolas,monospace;font-size:13.5px;padding:11px 18px;display:flex;align-items:center}
+
+/* TABLES */
+.tw{overflow-x:auto;margin:13px 0 20px;border-radius:8px;border:1px solid var(--teal-line)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+table th{background:var(--head-fill);color:#fff;text-align:left;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:9px 13px;white-space:nowrap}
+table td{padding:8px 13px;border-bottom:1px solid var(--teal-line);vertical-align:top;line-height:1.5}
+table tr:last-child td{border-bottom:none}
+table tr:nth-child(even){background:var(--zebra)}
+td.p{font-family:Consolas,monospace;font-size:12px;color:var(--primary);font-weight:700;background:var(--teal-wash);white-space:nowrap}
+td.mono{font-family:Consolas,monospace}
+td.mut{color:var(--muted)}
+td.ctr{text-align:center}
+td.b{font-weight:700}
+td.errc{font-family:Consolas,monospace;font-weight:700;color:var(--err);background:#FBEAEA;white-space:nowrap}
+.rq-y{color:var(--err);font-weight:700;font-size:12px}
+.rq-n{color:var(--muted);font-size:12px}
+.rq-c{color:var(--warn);font-weight:700;font-size:12px}
+
+/* CODE */
+.code{margin:11px 0 18px;border-radius:9px;overflow:hidden;border:1px solid #2E2856}
+.code-cap{background:#1D1A3D;color:var(--c-cmt);font-family:Consolas,monospace;font-size:11px;font-weight:700;letter-spacing:.08em;padding:7px 16px;display:flex;justify-content:space-between;align-items:center}
+.cp{background:#2B2558;color:#948DB8;border:1px solid #3A3268;font-size:10px;padding:3px 11px;border-radius:4px;cursor:pointer;font-family:inherit;letter-spacing:.04em}
+.cp:hover{background:var(--ok);color:#fff;border-color:var(--ok)}
+.code pre{background:var(--code-bg);margin:0;padding:16px 18px;overflow-x:auto;font-family:Consolas,'Courier New',monospace;font-size:12.5px;line-height:1.6;color:var(--code-fg)}
+.code .ln{display:block;white-space:pre}
+.c-cmt{color:var(--c-cmt);font-style:italic}.c-key{color:var(--c-key)}.c-str{color:var(--c-str)}
+.c-num{color:var(--c-num)}.c-kw{color:var(--c-kw)}.c-pun{color:var(--c-pun)}
+
+/* CALLOUTS */
+.call{border-radius:8px;padding:13px 16px;margin:14px 0;border-left:4px solid;font-size:13px;line-height:1.6}
+.call-t{font-weight:700;margin-bottom:3px}
+.call-info{background:var(--info-bg);border-color:var(--primary);color:#2B2358}
+.call-warn{background:var(--warn-bg);border-color:var(--warn);color:#5A3A0A}
+.call-error{background:var(--err-bg);border-color:var(--err);color:#5A1A1A}
+.call-ok{background:var(--ok-bg);border-color:var(--ok);color:#0E3A22}
+
+/* FOOTER */
+.foot{text-align:center;padding:36px 0 10px;color:var(--muted);font-size:12px;border-top:1px solid var(--teal-line);margin-top:36px}
+.foot b{color:var(--primary)}
+
+@media(max-width:920px){
+  .side{display:none}
+  .main{padding:0 20px 60px;max-width:100%}
+  .cover{margin:0 -20px;padding:44px 20px}
+  .cover h1{font-size:28px}
+  .meta{grid-template-columns:1fr}
+  .sec-h{margin-left:0}
+}
+</style>
+  <div class="wrap">
+    <nav class="side">
+      <div class="brand">
+        <div class="nm">Shri Hari App API</div>
+        <div class="sub">shrihari_api · Odoo 18 module</div>
+        <div class="ver">v1.0 — Integration Guide</div>
+      </div>
+      <div class="nav">
+        <div class="nav-g">
+          <div class="nav-gl">Overview</div>
+          <a href="#intro" class="nav-l" data-id="intro"><span class="nav-num">1</span><span class="nav-tx">Introduction</span></a>
+          <a href="#conventions" class="nav-l" data-id="conventions"><span class="nav-num">2</span><span class="nav-tx">API Conventions</span></a>
+          <a href="#environments" class="nav-l" data-id="environments"><span class="nav-num">3</span><span class="nav-tx">Environments &amp; Prerequisites</span></a>
+          <a href="#quickstart" class="nav-l" data-id="quickstart"><span class="nav-num">4</span><span class="nav-tx">Quick Start</span></a>
+        </div>
+        <div class="nav-g">
+          <div class="nav-gl">Core</div>
+          <a href="#auth" class="nav-l" data-id="auth"><span class="nav-num">5</span><span class="nav-tx">Authentication</span></a>
+          <a href="#account" class="nav-l" data-id="account"><span class="nav-num">6</span><span class="nav-tx">Account</span></a>
+          <a href="#categories" class="nav-l" data-id="categories"><span class="nav-num">7</span><span class="nav-tx">Categories</span><span class="mb mb-post">POST</span></a>
+          <a href="#products" class="nav-l" data-id="products"><span class="nav-num">8</span><span class="nav-tx">Products</span><span class="mb mb-post">POST</span></a>
+          <a href="#create-order" class="nav-l" data-id="create-order"><span class="nav-num">9</span><span class="nav-tx">Create Order</span><span class="mb mb-post">POST</span></a>
+          <a href="#list-orders" class="nav-l" data-id="list-orders"><span class="nav-num">10</span><span class="nav-tx">List My Orders</span><span class="mb mb-post">POST</span></a>
+        </div>
+        <div class="nav-g">
+          <div class="nav-gl">Retrieval</div>
+          <a href="#order-detail" class="nav-l" data-id="order-detail"><span class="nav-num">11</span><span class="nav-tx">Order Detail</span><span class="mb mb-post">POST</span></a>
+          <a href="#order-lines" class="nav-l" data-id="order-lines"><span class="nav-num">12</span><span class="nav-tx">Order Line Detail</span><span class="mb mb-post">POST</span></a>
+          <a href="#refdata" class="nav-l" data-id="refdata"><span class="nav-num">13</span><span class="nav-tx">Countries &amp; States</span><span class="mb mb-post">POST</span></a>
+        </div>
+        <div class="nav-g">
+          <div class="nav-gl">Integration</div>
+          <a href="#miracle" class="nav-l" data-id="miracle"><span class="nav-num">14</span><span class="nav-tx">Miracle Credentials</span><span class="mb mb-post">POST</span></a>
+          <a href="#miracle-proxy" class="nav-l" data-id="miracle-proxy"><span class="nav-num">15</span><span class="nav-tx">Miracle Account Proxy</span></a>
+        </div>
+        <div class="nav-g">
+          <div class="nav-gl">Reference</div>
+          <a href="#errors" class="nav-l" data-id="errors"><span class="nav-num">16</span><span class="nav-tx">Error Reference</span></a>
+        </div>
+      </div>
+    </nav>
+
+    <main class="main">
+      <div class="cover"><div class="cover-in">
+        <div class="eyebrow">Internal Integration Reference</div>
+        <h1>Shri Hari App <span>API Guide</span></h1>
+        <div class="tag">Everything the mobile app needs to log in, browse the catalog, and place orders against Odoo.</div>
+        <div class="meta">
+          <div class="meta-i"><div class="meta-l">Version</div><div class="meta-v">1.0 — Sep 2026</div></div>
+          <div class="meta-i"><div class="meta-l">Audience</div><div class="meta-v">Applified App Developer</div></div>
+          <div class="meta-i"><div class="meta-l">Module</div><div class="meta-v mono">shrihari_api</div></div>
+          <div class="meta-i"><div class="meta-l">Base URL</div><div class="meta-v mono">https://shreehari.applified.co.in/</div></div>
+        </div>
+      </div></div>
+
+      <!-- 1. INTRO -->
+      <section class="sec" id="intro">
+        <div class="sec-h"><span class="sec-n">1</span><h1>Introduction</h1></div>
+        <p class="lead">A REST layer bolted onto Odoo specifically for the Shri Hari distributor app — login, catalog, and order placement, all backed by real Odoo records.</p>
+        <h3>Purpose</h3>
+        <p>The <code>shrihari_api</code> module exposes a set of plain HTTP endpoints (Odoo <code>http.Controller</code> routes) that the mobile app calls directly. There is no intermediate API gateway — every call runs straight into Odoo's ORM, <code>sudo()</code>'d past normal user access rights, with its own custom bearer-token auth layer instead of Odoo's web session cookies. A subset of endpoints (<a href="#miracle-proxy">§15</a>) additionally act as a transparent proxy to Miracle Cloud ERP itself — the app calls Odoo instead of Miracle directly, and gets Miracle's own response back untouched.</p>
+        <h3>Architecture at a Glance</h3>
+        <div class="tw"><table>
+          <tr><th>Concept</th><th>Detail</th></tr>
+          <tr><td class="p">Style</td><td>REST-shaped HTTP endpoints (Odoo <code>type='http'</code> controllers, not Odoo's JSON-RPC)</td></tr>
+          <tr><td class="p">Data Format</td><td>Request: <code>multipart/form-data</code> or <code>application/x-www-form-urlencoded</code> body params. Response: JSON.</td></tr>
+          <tr><td class="p">Authentication</td><td>Custom Bearer token, issued by <code>/user_login</code> and stored in the <code>partner.api.key</code> model — independent of Odoo's own login sessions</td></tr>
+          <tr><td class="p">Transport Security</td><td>Use HTTPS in production. Development instances shown here run over plain HTTP on <code>localhost</code>.</td></tr>
+          <tr><td class="p">Base URL</td><td class="mono">https://shreehari.applified.co.in/</td></tr>
+        </table></div>
+      </section>
+
+      <!-- 2. CONVENTIONS -->
+      <section class="sec" id="conventions">
+        <div class="sec-h"><span class="sec-n">2</span><h1>API Conventions</h1></div>
+        <p class="lead">Rules that apply across every endpoint below, stated once here.</p>
+
+        <h3>Every call (except login) needs two things</h3>
+        <ul class="bul">
+          <li><code>user_id</code> — included as a normal body parameter on every request, not just in the URL.</li>
+          <li><code>Authorization: Bearer &lt;access_token&gt;</code> — the header, carrying the token returned by <code>/user_login</code>.</li>
+        </ul>
+        <p>Both are checked together by a shared helper before any endpoint's own logic runs. If either is missing or invalid, you get a <code>success: false</code> response before any business logic executes — see <a href="#errors">16 Error Reference</a>.</p>
+
+        <h3>Standard Response Shape</h3>
+        <p>Every response carries a top-level <code>success</code> boolean. Beyond that, the shape is <strong>endpoint-specific</strong> — some nest results under <code>data</code>, others use a bespoke key (<code>categories</code>, <code>products</code>, <code>sale_orders</code>...). There is currently no single fixed envelope across all endpoints — always check each endpoint's own example below rather than assuming a common shape.</p>
+        <div class="code"><div class="code-cap">MINIMUM SHAPE — EVERY RESPONSE<button class="cp" onclick="cpCode(this)">Copy</button></div><pre><span class="ln"><span class="c-pun">{</span></span><span class="ln">  <span class="c-key">"success":</span> <span class="c-kw">true</span><span class="c-pun">,</span>  <span class="c-cmt">// or false</span></span><span class="ln">  <span class="c-key">"message":</span> <span class="c-str">"..."</span>  <span class="c-cmt">// present mainly on errors, and on a few success cases</span></span><span class="ln">  <span class="c-cmt">// ...remaining fields vary per endpoint</span></span><span class="ln"><span class="c-pun">}</span></span></pre></div>
+
+        <h3>Image URLs</h3>
+        <p>Wherever a response includes <code>image_url</code>, it's an absolute link into Odoo's built-in attachment controller, e.g. <code>/web/image/product.template/&lt;id&gt;/image_1920</code>, with a <code>?t=&lt;timestamp&gt;</code> cache-buster appended. No separate download endpoint or auth is needed to load it — the image controller is public.</p>
+
+        <h3>Numeric &amp; ID Conventions</h3>
+        <div class="tw"><table>
+          <tr><th>Field</th><th>Meaning</th></tr>
+          <tr><td class="p">user_id</td><td>An Odoo <code>res.users</code> id — this is what the app must send back on every call, not the partner/contact id.</td></tr>
+          <tr><td class="p">sale_capture_id</td><td>Legacy name kept for app compatibility — it is the real <code>sale.order</code> id, not a separate model.</td></tr>
+          <tr><td class="p">product id (catalog)</td><td>The <code>product.product</code> (variant) id, not the <code>product.template</code> id — use this when placing an order.</td></tr>
+        </table></div>
+
+        <h3>Number Formatting</h3>
+        <p>Every monetary/quantity value (prices, rates, quantities, totals) is returned as a <strong>string</strong>, formatted dynamically: <strong>2 decimal places</strong> when the value is a whole number, <strong>4 decimal places</strong> when it actually carries a fractional part.</p>
+        <div class="code"><div class="code-cap">EXAMPLES<button class="cp" onclick="cpCode(this)">Copy</button></div><pre><span class="ln"><span class="c-num">2376</span> <span class="c-cmt">→</span> <span class="c-str">"2376.00"</span>   <span class="c-cmt">// whole number → 2 decimals</span></span><span class="ln"><span class="c-num">2185.92</span> <span class="c-cmt">→</span> <span class="c-str">"2185.9200"</span>  <span class="c-cmt">// has a fraction → 4 decimals</span></span></pre></div>
+        <div class="call call-warn"><div class="call-t">These are strings, not JSON numbers</div>Parse every such field as a number on your side before doing math or comparisons with it — don't compare it as text. <code>id</code> fields are the exception: those stay real JSON integers.</div>
+      </section>
+
+      <!-- 3. ENVIRONMENTS -->
+      <section class="sec" id="environments">
+        <div class="sec-h"><span class="sec-n">3</span><h1>Environments &amp; Prerequisites</h1></div>
+        <div class="ep"><span class="ep-m ep-base">BASE</span><span class="ep-u">https://shreehari.applified.co.in/</span></div>
+        <h3>Before the app can do anything useful</h3>
+        <ol class="steps">
+          <li>The customer must have an active <code>res.users</code> account linked to a <code>res.partner</code> (see the "Grant App Access" wizard on any Contact).</li>
+          <li><code>shrihari_api</code>, <code>shrihari_sales</code>, and <code>app_miracle_account</code> must be installed on that user's company.</li>
+          <li>A single <code>app.version</code> record must exist for <a href="#account">6 Get App Version</a> to return anything.</li>
+          <li><strong>Settings → Sales</strong>: set <em>Mobile App Global Pricelist</em> if you want tiered slab pricing, and <em>Mobile App Freight &amp; Transport Charge</em> if freight should be auto-added to orders.</li>
+        </ol>
+      </section>
+
+      <!-- 4. QUICK START -->
+      <section class="sec" id="quickstart">
+        <div class="sec-h"><span class="sec-n">4</span><h1>Quick Start</h1></div>
+        <ol class="steps">
+          <li>Call <a href="#auth"><code>POST /user_login</code></a> with mobile/email + password. Store the returned <code>user_id</code> and <code>access_token</code>.</li>
+          <li>Attach <code>user_id</code> as a body param and <code>Authorization: Bearer &lt;access_token&gt;</code> as a header on every call from here on.</li>
+          <li>Browse the catalog: <a href="#categories"><code>POST /product_category</code></a>, then <a href="#products"><code>POST /products_by_category</code></a> per category.</li>
+          <li>Place an order: <a href="#create-order"><code>POST /create_sale_capture</code></a>. Odoo confirms it, ships it, and invoices it automatically.</li>
+          <li>Before the token's 7-day expiry, call <a href="#auth"><code>POST /refresh_token</code></a> to extend it — otherwise the user has to log in again.</li>
+        </ol>
+      </section>
+
+      <!-- 5. AUTHENTICATION -->
+      <section class="sec" id="auth">
+        <div class="sec-h"><span class="sec-n">5</span><h1>Authentication</h1></div>
+        <p class="lead">Custom bearer tokens, independent of Odoo's own login. Two endpoints: get one, and keep it alive.</p>
+
+        <h2>Login</h2>
+        <div class="ep"><span class="ep-m ep-post">POST</span><span class="ep-u">/user_login</span></div>
+        <h3>Request Parameters</h3>
+        <div class="tw"><table>
+          <tr><th>Parameter</th><th>Type</th><th>Required</th><th>Remarks</th></tr>
+          <tr><td class="p">email</td><td class="mono mut">String</td><td><span class="rq-c">One of email/mobile</span></td><td>Matched against <code>res.users.login</code>.</td></tr>
+          <tr><td class="p">mobile</td><td class="mono mut">String</td><td><span class="rq-c">One of email/mobile</span></td><td>Matched by last 10 digits — country-code prefixes (e.g. <code>+91</code>) are tolerated automatically.</td></tr>
+          <tr><td class="p">password</td><td class="mono mut">String</td><td><span class="rq-y">Yes</span></td><td>Checked via Odoo's own credential check.</td></tr>
+          <tr><td class="p">device_token</td><td class="mono mut">String</td><td><span class="rq-n">No</span></td><td>Push-notification device token; stored/updated on the user record on every login.</td></tr>
+        </table></div>
+        <h3>Success Response</h3>
+        <div class="code"><div class="code-cap">200 OK<button class="cp" onclick="cpCode(this)">Copy</button></div><pre><span class="ln"><span class="c-pun">{</span></span><span class="ln">  <span class="c-key">"success":</span> <span class="c-kw">true</span><span class="c-pun">,</span></span><span class="ln">  <span class="c-key">"message":</span> <span class="c-str">"Login Successful!"</span><span class="c-pun">,</span></span><span class="ln">  <span class="c-key">"user_id":</span> <span class="c-num">42</span><span class="c-pun">,</span></span><span class="ln">  <span class="c-key">"name":</span> <span class="c-str">"Ramesh Traders"</span><span class="c-pun">,</span></span><span class="ln">  <span class="c-key">"access_token":</span> <span class="c-str">"9f2c...(64 hex chars)"</span><span class="c-pun">,</span></span><span class="ln">  <span class="c-key">"customer":</span> <span class="c-pun">{</span></span><span class="ln">    <span class="c-key">"partner_id":</span> <span class="c-num">108</span><span class="c-pun">,</span> <span class="c-key">"miracle_account_id":</span> <span class="c-str">"AC0234"</span><span class="c-pun">,</span></span><span class="ln">    <span class="c-key">"mobile":</span> <span class="c-str">"9998887770"</span><span class="c-pun">,</span> <span class="c-key">"credit_limit":</span> <span class="c-str">"100000.00"</span><span class="c-pun">,</span> <span class="c-key">"crdays":</span> <span class="c-num">30</span></span><span class="ln">    <span class="c-cmt">// ...street/city/state/country/email</span></span><span class="ln">  <span class="c-pun">}</span></span><span class="ln"><span class="c-pun">}</span></span></pre></div>
+        <h3>Error Responses</h3>
+        <div class="tw"><table>
+          <tr><th>Message</th><th>Cause</th></tr>
+          <tr><td>Email or Mobile, and password are required!</td><td>Neither identifier supplied.</td></tr>
+          <tr><td>Account not found!</td><td>No matching, active user.</td></tr>
+          <tr><td>Account deactivated, please contact support!</td><td>A matching user exists but is archived.</td></tr>
+          <tr><td>Invalid password!</td><td>Credential check failed.</td></tr>
+        </table></div>
+        <div class="call call-info"><div class="call-t">Token reuse</div>An existing, unexpired token for the same user is reused rather than minting a new one — logging in twice does not invalidate the first session.</div>
+
+        <h2>Refresh Token</h2>
+        <div class="ep"><span class="ep-m ep-post">POST</span><span class="ep-u">/refresh_token</span></div>
+        <p>Identifies the user purely from the <code>Authorization</code> header — no <code>user_id</code> body param needed here. Extends expiry by 7 days from now.</p>
+        <div class="code"><div class="code-cap">200 OK<button class="cp" onclick="cpCode(this)">Copy</button></div><pre><span class="ln"><span class="c-pun">{</span></span><span class="ln">  <span class="c-key">"success":</span> <span class="c-kw">true</span><span class="c-pun">,</span></span><span class="ln">  <span class="c-key">"message":</span> <span class="c-str">"Token expiry extended successfully"</span><span class="c-pun">,</span></span><span class="ln">  <span class="c-key">"user_id":</span> <span class="c-num">42</span><span class="c-pun">,</span> <span class="c-key">"user_name":</span> <span class="c-str">"Ramesh Traders"</span><span class="c-pun">,</span></span><span class="ln">  <span class="c-key">"new_expiry_date":</span> <span class="c-str">"2026-09-23 10:15:00"</span></span><span class="ln"><span class="c-pun">}</span></span></pre></div>
+        <div class="call call-warn"><div class="call-t">Call this proactively</div>There is no automatic refresh anywhere in the system. If the app never calls this, the token silently stops working after 7 days and every endpoint starts returning <code>"Token is Expired"</code>.</div>
+      </section>
+
+      <!-- 6. ACCOUNT -->
+      <section class="sec" id="account">
+        <div class="sec-h"><span class="sec-n">6</span><h1>Account</h1></div>
+
+        <h2>Deactivate Account</h2>
+        <div class="ep"><span class="ep-m ep-get">GET</span><span class="ep-u">/delete_account/{user_id}</span></div>
+        <p><code>user_id</code> is a URL path segment here, not a body param.</p>
+        <div class="call call-warn"><div class="call-t">No authentication on this endpoint</div>Unlike every other endpoint in this guide, <code>/delete_account</code> does not check a Bearer token or verify the caller owns the account being deactivated — any caller who knows a <code>user_id</code> can deactivate it. Do not expose this route to anything other than a trusted, authenticated in-app "delete my account" action; it should not be called with a user-supplied id from outside that flow.</div>
+        <div class="code"><div class="code-cap">200 OK<button class="cp" onclick="cpCode(this)">Copy</button></div><pre><span class="ln"><span class="c-pun">{</span> <span class="c-key">"success":</span> <span class="c-kw">true</span><span class="c-pun">,</span> <span class="c-key">"message":</span> <span class="c-str">"User deactivated successfully!"</span><span class="c-pun">,</span> <span class="c-key">"user_id":</span> <span class="c-num">42</span><span class="c-pun">,</span> <span class="c-key">"login":</span> <span class="c-str">"9998887770"</span> <span class="c-pun">}</span></span></pre></div>
+        <div class="call call-info"><div class="call-t">Reserved account</div><code>user_id = 7</code> always returns a success message but is never actually archived — it's an internal safeguard, not a bug in your integration.</div>
+
+        <h2>App Version</h2>
+        <div class="ep"><span class="ep-m ep-get">GET</span><span class="ep-u">/get_app_version</span></div>
+        <p>No parameters. Reads the single <code>app.version</code> record configured in Odoo.</p>
+        <div class="code"><div class="code-cap">200 OK<button class="cp" onclick="cpCode(this)">Copy</button></div><pre><span class="ln"><span class="c-pun">{</span> <span class="c-key">"success":</span> <span class="c-kw">true</span><span class="c-pun">,</span> <span class="c-key">"data":</span> <span class="c-pun">{</span> <span class="c-key">"id":</span> <span class="c-num">1</span><span class="c-pun">,</span> <span class="c-key">"android_version":</span> <span class="c-str">"2.4.0"</span><span class="c-pun">,</span> <span class="c-key">"ios_version":</span> <span class="c-str">"2.3.1"</span> <span class="c-pun">}</span> <span class="c-pun">}</span></span></pre></div>
+      </section>
+
+      <!-- 7. CATEGORIES -->
+      <section class="sec" id="categories">
+        <div class="sec-h"><span class="sec-n">7</span><h1>Categories</h1></div>
+        <div class="ep"><span class="ep-m ep-post">POST</span><span class="ep-u">/product_category</span></div>
+        <h3>Request Parameters</h3>
+        <div class="tw"><table>
+          <tr><th>Parameter</th><th>Required</th><th>Remarks</th></tr>
+          <tr><td class="p">user_id</td><td><span class="rq-y">Yes</span></td><td>Standard auth param.</td></tr>
+        </table></div>
+        <h3>Success Response</h3>
+        <div class="code"><div class="code-cap">200 OK<button class="cp" onclick="cpCode(this)">Copy</button></div><pre><span class="ln"><span class="c-pun">{</span></span><span class="ln">  <span class="c-key">"success":</span> <span class="c-kw">true</span><span class="c-pun">,</span> <span class="c-key">"count":</span> <span class="c-num">2</span><span class="c-pun">,</span></span><span class="ln">  <span class="c-key">"categories":</span> <span class="c-pun">[</span></span><span class="ln">    <span class="c-pun">{</span> <span class="c-key">"id":</span> <span class="c-num">14</span><span class="c-pun">,</span> <span class="c-key">"name":</span> <span class="c-str">"7 Oils"</span><span class="c-pun">,</span> <span class="c-key">"image_url":</span> <span class="c-str">"https://.../web/image/product.category/14/image_128?t=..."</span> <span class="c-pun">}</span><span class="c-pun">,</span></span><span class="ln">    <span class="c-pun">{</span> <span class="c-key">"id":</span> <span class="c-num">15</span><span class="c-pun">,</span> <span class="c-key">"name":</span> <span class="c-str">"Soaps"</span><span class="c-pun">,</span> <span class="c-key">"image_url":</span> <span class="c-str">"https://.../web/image/product.category/15/image_128?t=..."</span> <span class="c-pun">}</span></span><span class="ln">  <span class="c-pun">]</span></span><span class="ln"><span class="c-pun">}</span></span></pre></div>
+        <div class="call call-info"><div class="call-t">Placeholder images</div>If a category has no photo uploaded in Odoo, <code>image_url</code> is still returned — it just resolves to Odoo's default placeholder image. Treat a missing/blank <code>id</code> as the only real "no data" signal, not the image itself.</div>
+      </section>
+
+      <!-- 8. PRODUCTS -->
+      <section class="sec" id="products">
+        <div class="sec-h"><span class="sec-n">8</span><h1>Products</h1></div>
+        <div class="ep"><span class="ep-m ep-post">POST</span><span class="ep-u">/products_by_category</span></div>
+        <h3>Request Parameters</h3>
+        <div class="tw"><table>
+          <tr><th>Parameter</th><th>Required</th><th>Remarks</th></tr>
+          <tr><td class="p">user_id</td><td><span class="rq-y">Yes</span></td><td>Standard auth param.</td></tr>
+          <tr><td class="p">category_id</td><td><span class="rq-n">No</span></td><td>Includes products in child categories automatically. If omitted, all products are returned.</td></tr>
+        </table></div>
+        <h3>Success Response</h3>
+        <div class="code"><div class="code-cap">200 OK<button class="cp" onclick="cpCode(this)">Copy</button></div><pre><span class="ln"><span class="c-pun">{</span></span><span class="ln">  <span class="c-key">"success":</span> <span class="c-kw">true</span><span class="c-pun">,</span> <span class="c-key">"category_id":</span> <span class="c-num">9</span><span class="c-pun">,</span> <span class="c-key">"category_name":</span> <span class="c-str">"SETWET"</span><span class="c-pun">,</span> <span class="c-key">"total_products":</span> <span class="c-num">1</span><span class="c-pun">,</span></span><span class="ln">  <span class="c-key">"products":</span> <span class="c-pun">[</span> <span class="c-pun">{</span></span><span class="ln">    <span class="c-key">"id":</span> <span class="c-num">4252</span><span class="c-cmt"> // product.product id — use this to place an order</span><span class="c-pun">,</span></span><span class="ln">    <span class="c-key">"name":</span> <span class="c-str">"SETWET 50/-(72) BLUE."</span><span class="c-pun">,</span> <span class="c-key">"default_code":</span> <span class="c-str">""</span><span class="c-pun">,</span></span><span class="ln">    <span class="c-key">"list_price":</span> <span class="c-str">"2376.00"</span><span class="c-pun">,</span> <span class="c-key">"miracle_cart_rate":</span> <span class="c-str">"33.00"</span><span class="c-pun">,</span> <span class="c-key">"miracle_mrp":</span> <span class="c-str">"50.00"</span><span class="c-pun">,</span></span><span class="ln">    <span class="c-key">"taxes":</span> <span class="c-pun">[</span> <span class="c-pun">{</span> <span class="c-key">"id":</span> <span class="c-num">5</span><span class="c-pun">,</span> <span class="c-key">"name":</span> <span class="c-str">"18% GST S"</span> <span class="c-pun">}</span> <span class="c-pun">]</span><span class="c-pun">,</span></span><span class="ln">    <span class="c-key">"free_qty":</span> <span class="c-str">"0.00"</span><span class="c-pun">,</span> <span class="c-key">"best_company":</span> <span class="c-str">"Shree Hari Marketing"</span><span class="c-pun">,</span></span><span class="ln">    <span class="c-key">"uom":</span> <span class="c-str">"UOM QTY2 72.0000"</span><span class="c-pun">,</span> <span class="c-key">"uom_qty":</span> <span class="c-str">"72.00"</span><span class="c-pun">,</span> <span class="c-key">"category":</span> <span class="c-str">"SETWET"</span><span class="c-pun">,</span></span><span class="ln">    <span class="c-key">"pricing_slabs":</span> <span class="c-pun">[</span></span><span class="ln">      <span class="c-pun">{</span> <span class="c-key">"min_qty":</span> <span class="c-str">"25.00"</span><span class="c-pun">,</span> <span class="c-key">"price":</span> <span class="c-str">"2304.00"</span><span class="c-pun">,</span> <span class="c-key">"discount_type":</span> <span class="c-str">"fixed"</span><span class="c-pun">,</span></span><span class="ln">        <span class="c-key">"single_piece_price":</span> <span class="c-str">"32.00"</span><span class="c-pun">,</span> <span class="c-key">"discount_percent":</span> <span class="c-kw">null</span><span class="c-pun">,</span></span><span class="ln">        <span class="c-key">"discount_message":</span> <span class="c-str">"Buy 25+ at ₹2304.0/box"</span> <span class="c-pun">}</span><span class="c-pun">,</span></span><span class="ln">      <span class="c-pun">{</span> <span class="c-key">"min_qty":</span> <span class="c-str">"100.00"</span><span class="c-pun">,</span> <span class="c-key">"price":</span> <span class="c-str">"3420.00"</span><span class="c-pun">,</span> <span class="c-key">"discount_type":</span> <span class="c-str">"percentage"</span><span class="c-pun">,</span></span><span class="ln">        <span class="c-key">"single_piece_price":</span> <span class="c-str">"50.00"</span><span class="c-pun">,</span> <span class="c-key">"discount_percent":</span> <span class="c-str">"5.00"</span><span class="c-pun">,</span></span><span class="ln">        <span class="c-key">"discount_message":</span> <span class="c-str">"Buy 100+ at ₹3420.0/box"</span> <span class="c-pun">}</span></span><span class="ln">    <span class="c-pun">]</span><span class="c-pun">,</span></span><span class="ln">    <span class="c-key">"image_url":</span> <span class="c-str">"https://.../web/image/product.template/.../image_1920?t=..."</span></span><span class="ln">  <span class="c-pun">}</span> <span class="c-pun">]</span></span><span class="ln"><span class="c-pun">}</span></span></pre></div>
+        <div class="call call-info"><div class="call-t">free_qty vs list_price</div><code>free_qty</code> is on-hand minus reserved stock for the user's company — treat it as the sellable cap for that line. <code>pricing_slabs</code> is only populated when <em>Mobile App Global Pricelist</em> is configured in Settings; otherwise it's always an empty array.</div>
+        <div class="call call-info"><div class="call-t">uom vs uom_qty</div><code>uom</code> is the human-readable UOM name (e.g. <code>"UOM QTY2 72.0000"</code>); <code>uom_qty</code> is the actual pack size as a number (<code>72</code>) — use this one for any math, no string-parsing needed.</div>
+        <div class="call call-warn"><div class="call-t">How each pricing_slabs entry is priced</div>
+        <code>discount_type: "fixed"</code> rules are entered in Odoo as a <strong>per-piece</strong> rate — <code>single_piece_price</code> is that rate, and <code>price</code> is it multiplied by <code>uom_qty</code> (the box price actually charged).<br/>
+        <code>discount_type: "percentage"</code> rules discount off <strong>Miracle MRP</strong> (<code>single_piece_price</code> here is the MRP), not off <code>list_price</code> — since MRP is usually well above the normal selling rate, a percentage slab can legitimately price <em>higher</em> than the plain box price. This is intentional, not a bug — display it as its own tier, not as automatically "cheaper."<br/>
+        Both numbers come from the exact same calculation Odoo uses to actually charge a real order, so <code>price</code> here is always what the customer will be billed if that quantity is ordered.
+        </div>
+      </section>
+
+      <!-- 9. CREATE ORDER -->
+      <section class="sec" id="create-order">
+        <div class="sec-h"><span class="sec-n">9</span><h1>Create Order</h1></div>
+        <div class="ep"><span class="ep-m ep-post">POST</span><span class="ep-u">/create_sale_capture</span></div>
+        <p>One call does everything: creates the order against the logged-in user's own contact, confirms it, validates the delivery, creates and posts the invoice, and queues a background sync to Miracle Cloud ERP.</p>
+        <h3>Request Parameters</h3>
+        <div class="tw"><table>
+          <tr><th>Parameter</th><th>Type</th><th>Required</th><th>Remarks</th></tr>
+          <tr><td class="p">user_id</td><td class="mono mut">Integer</td><td><span class="rq-y">Yes</span></td><td>Standard auth param.</td></tr>
+          <tr><td class="p">line_product_id[0..n]</td><td class="mono mut">Integer</td><td><span class="rq-y">Yes</span></td><td>Indexed from 0, contiguous. The <code>product.product</code> id from §8.</td></tr>
+          <tr><td class="p">line_qty[0..n]</td><td class="mono mut">Float</td><td><span class="rq-y">Yes</span></td><td>Must not exceed the product's current <code>free_qty</code>.</td></tr>
+          <tr><td class="p">line_price[0..n]</td><td class="mono mut">Float</td><td><span class="rq-n">No</span></td><td>Omit to auto-price from the configured pricelist, or the product's list price if none is set.</td></tr>
+        </table></div>
+        <div class="call call-info"><div class="call-t">Indexed array format</div>Lines are read as separate form fields <code>line_product_id[0]</code>, <code>line_qty[0]</code>, <code>line_price[0]</code>, then <code>[1]</code>, <code>[2]</code>... — reading stops at the first missing index, so indexes must be contiguous starting from 0.</div>
+        <h3>Success Response</h3>
+        <div class="code"><div class="code-cap">200 OK<button class="cp" onclick="cpCode(this)">Copy</button></div><pre><span class="ln"><span class="c-pun">{</span></span><span class="ln">  <span class="c-key">"success":</span> <span class="c-kw">true</span><span class="c-pun">,</span> <span class="c-key">"message":</span> <span class="c-str">"Order created successfully"</span><span class="c-pun">,</span></span><span class="ln">  <span class="c-key">"customer_id":</span> <span class="c-num">108</span><span class="c-pun">,</span> <span class="c-key">"customer_name":</span> <span class="c-str">"Ramesh Traders"</span><span class="c-pun">,</span></span><span class="ln">  <span class="c-key">"sale_capture_id":</span> <span class="c-num">331</span><span class="c-pun">,</span> <span class="c-key">"reference":</span> <span class="c-str">"S00331"</span><span class="c-pun">,</span> <span class="c-key">"state":</span> <span class="c-str">"sale"</span><span class="c-pun">,</span></span><span class="ln">  <span class="c-key">"sale_orders":</span> <span class="c-pun">[</span> <span class="c-pun">{</span> <span class="c-key">"id":</span> <span class="c-num">331</span><span class="c-pun">,</span> <span class="c-key">"name":</span> <span class="c-str">"S00331"</span><span class="c-pun">,</span> <span class="c-key">"company":</span> <span class="c-str">"Shree Hari Marketing"</span><span class="c-pun">,</span> <span class="c-key">"amount_total":</span> <span class="c-str">"37485.00"</span> <span class="c-pun">}</span> <span class="c-pun">]</span></span><span class="ln"><span class="c-pun">}</span></span></pre></div>
+        <h3>Error Responses</h3>
+        <div class="tw"><table>
+          <tr><th>Message</th><th>Cause</th></tr>
+          <tr><td>Invalid qty/price at line {n}</td><td>Non-numeric qty/price.</td></tr>
+          <tr><td>Invalid product_id: {id}</td><td>Product id doesn't exist.</td></tr>
+          <tr><td>Not enough stock for product {name}. Available: X, Requested: Y</td><td>Requested qty exceeds free stock.</td></tr>
+          <tr><td>At least one product is required</td><td>No valid lines parsed.</td></tr>
+        </table></div>
+        <div class="call call-ok"><div class="call-t">Freight &amp; Transport Charges</div>Odoo automatically appends a freight line to <strong>every</strong> order — app or backend — priced at <code>(total units across all lines) × (freight product's Sales Price)</code>, using whatever product is set under <em>Settings → Sales → Mobile App Freight &amp; Transport Charge</em>. This line will appear in <code>amount_total</code> and in the order lines returned by §10–12; there's nothing the app needs to send for it.</div>
+        <div class="call call-warn"><div class="call-t">Miracle sync is asynchronous</div>The response returns as soon as the order/invoice exist in Odoo. The push to Miracle Cloud ERP happens in a background job triggered right after — a <code>success: true</code> here does not guarantee the order has reached Miracle yet.</div>
+      </section>
+
+      <!-- 10. LIST ORDERS -->
+      <section class="sec" id="list-orders">
+        <div class="sec-h"><span class="sec-n">10</span><h1>List My Orders</h1></div>
+        <div class="ep"><span class="ep-m ep-post">POST</span><span class="ep-u">/sale_capture_list</span></div>
+        <p>Every order placed by the logged-in user, newest first, with full line detail inline.</p>
+        <div class="tw"><table>
+          <tr><th>Parameter</th><th>Required</th><th>Remarks</th></tr>
+          <tr><td class="p">user_id</td><td><span class="rq-y">Yes</span></td><td>Filters to this user's own orders only.</td></tr>
+        </table></div>
+        <div class="code"><div class="code-cap">200 OK<button class="cp" onclick="cpCode(this)">Copy</button></div><pre><span class="ln"><span class="c-pun">{</span> <span class="c-key">"success":</span> <span class="c-kw">true</span><span class="c-pun">,</span> <span class="c-key">"total_records":</span> <span class="c-num">1</span><span class="c-pun">,</span></span><span class="ln">  <span class="c-key">"data":</span> <span class="c-pun">[</span> <span class="c-pun">{</span> <span class="c-key">"sale_capture_id":</span> <span class="c-num">331</span><span class="c-pun">,</span> <span class="c-key">"reference":</span> <span class="c-str">"S00331"</span><span class="c-pun">,</span> <span class="c-key">"state":</span> <span class="c-str">"sale"</span><span class="c-pun">,</span></span><span class="ln">    <span class="c-key">"lines":</span> <span class="c-pun">[</span> <span class="c-pun">{</span> <span class="c-key">"product_id":</span> <span class="c-num">240</span><span class="c-pun">,</span> <span class="c-key">"qty":</span> <span class="c-str">"1.00"</span><span class="c-pun">,</span> <span class="c-key">"price":</span> <span class="c-str">"120.00"</span><span class="c-pun">,</span> <span class="c-key">"subtotal":</span> <span class="c-str">"120.00"</span> <span class="c-pun">}</span> <span class="c-pun">]</span></span><span class="ln">  <span class="c-pun">}</span> <span class="c-pun">]</span> <span class="c-pun">}</span></span></pre></div>
+      </section>
+
+      <!-- 11. ORDER DETAIL -->
+      <section class="sec" id="order-detail">
+        <div class="sec-h"><span class="sec-n">11</span><h1>Order Detail</h1></div>
+        <div class="ep"><span class="ep-m ep-post">POST</span><span class="ep-u">/list_sale_capture_sale_orders</span></div>
+        <p>Single-order lookup by id, grouped company-wise for app-side compatibility with the older multi-company flow.</p>
+        <div class="tw"><table>
+          <tr><th>Parameter</th><th>Required</th><th>Remarks</th></tr>
+          <tr><td class="p">user_id</td><td><span class="rq-y">Yes</span></td><td>Standard auth param.</td></tr>
+          <tr><td class="p">sale_capture_id</td><td><span class="rq-y">Yes</span></td><td>The <code>sale.order</code> id.</td></tr>
+        </table></div>
+        <div class="call call-info"><div class="call-t">No ownership check</div>This endpoint browses the order by id directly — it doesn't verify the order belongs to the calling <code>user_id</code>. Don't rely on it to keep one user's orders private from another's app session.</div>
+      </section>
+
+      <!-- 12. ORDER LINE DETAIL -->
+      <section class="sec" id="order-lines">
+        <div class="sec-h"><span class="sec-n">12</span><h1>Order Line Detail</h1></div>
+        <div class="ep"><span class="ep-m ep-post">POST</span><span class="ep-u">/list_sale_order_details</span></div>
+        <p>Full line-by-line breakdown of one order, including per-line image URLs.</p>
+        <div class="tw"><table>
+          <tr><th>Parameter</th><th>Required</th><th>Remarks</th></tr>
+          <tr><td class="p">user_id</td><td><span class="rq-y">Yes</span></td><td>Standard auth param.</td></tr>
+          <tr><td class="p">sale_order_id</td><td><span class="rq-c">One of the two</span></td><td>Preferred name.</td></tr>
+          <tr><td class="p">sale_capture_id</td><td><span class="rq-c">One of the two</span></td><td>Legacy alias, still accepted.</td></tr>
+        </table></div>
+      </section>
+
+      <!-- 13. REFERENCE DATA -->
+      <section class="sec" id="refdata">
+        <div class="sec-h"><span class="sec-n">13</span><h1>Countries &amp; States</h1></div>
+        <p class="lead">Static lookups, useful for address forms.</p>
+        <h2>Countries</h2>
+        <div class="ep"><span class="ep-m ep-post">POST</span><span class="ep-u">/countries</span></div>
+        <p>No extra parameters beyond <code>user_id</code>. Returns every <code>res.country</code>, alphabetically.</p>
+        <h2>States by Country</h2>
+        <div class="ep"><span class="ep-m ep-post">POST</span><span class="ep-u">/states_by_country</span></div>
+        <div class="tw"><table>
+          <tr><th>Parameter</th><th>Required</th><th>Remarks</th></tr>
+          <tr><td class="p">user_id</td><td><span class="rq-y">Yes</span></td><td>Standard auth param.</td></tr>
+          <tr><td class="p">country_id</td><td><span class="rq-y">Yes</span></td><td>From the countries call above.</td></tr>
+        </table></div>
+      </section>
+
+      <!-- 14. MIRACLE CREDENTIALS -->
+      <section class="sec" id="miracle">
+        <div class="sec-h"><span class="sec-n">14</span><h1>Miracle Credentials</h1></div>
+        <div class="ep"><span class="ep-m ep-post">POST</span><span class="ep-u">/get_miracle_credentials</span></div>
+        <p>Hands the app what it needs to talk to Miracle Cloud ERP directly for the logged-in user's company.</p>
+        <div class="tw"><table>
+          <tr><th>Parameter</th><th>Required</th><th>Remarks</th></tr>
+          <tr><td class="p">user_id</td><td><span class="rq-y">Yes</span></td><td>Standard auth param.</td></tr>
+        </table></div>
+        <div class="code"><div class="code-cap">200 OK<button class="cp" onclick="cpCode(this)">Copy</button></div><pre><span class="ln"><span class="c-pun">{</span> <span class="c-key">"success":</span> <span class="c-kw">true</span><span class="c-pun">,</span> <span class="c-key">"data":</span> <span class="c-pun">[</span> <span class="c-pun">{</span></span><span class="ln">  <span class="c-key">"id":</span> <span class="c-num">1</span><span class="c-pun">,</span> <span class="c-key">"name":</span> <span class="c-str">"Shree Hari Marketing"</span><span class="c-pun">,</span></span><span class="ln">  <span class="c-key">"MIRACLE_BASE_URL":</span> <span class="c-str">"https://tpaapi.miracleclouderp.com"</span><span class="c-pun">,</span></span><span class="ln">  <span class="c-key">"URL_KEY":</span> <span class="c-str">"..."</span><span class="c-pun">,</span> <span class="c-key">"CLIENT_ID":</span> <span class="c-str">"..."</span><span class="c-pun">,</span> <span class="c-key">"API_KEY":</span> <span class="c-str">"..."</span><span class="c-pun">,</span></span><span class="ln">  <span class="c-key">"ACCID":</span> <span class="c-str">"AC0234"</span><span class="c-pun">,</span></span><span class="ln">  <span class="c-key">"ACTIVE_TOKEN":</span> <span class="c-str">"eyJhbGciOiJIUzI1Ni..."</span><span class="c-pun">,</span></span><span class="ln">  <span class="c-key">"TOKEN_GENERATED_AT":</span> <span class="c-str">"2026-09-16 16:22:23"</span><span class="c-pun">,</span></span><span class="ln">  <span class="c-key">"TOKEN_EXPIRY_AT":</span> <span class="c-str">"2026-09-17 16:22:23"</span></span><span class="ln"><span class="c-pun">}</span> <span class="c-pun">]</span> <span class="c-pun">}</span></span></pre></div>
+        <div class="call call-info"><div class="call-t">Largely superseded by §15</div>This endpoint still works, but as of §15's proxy endpoints, the app no longer needs <code>ACTIVE_TOKEN</code>/<code>CLIENT_ID</code>/<code>API_KEY</code> for account balance, account details, ledger, voucher list, or PDF generation — those now go through Odoo directly. <strong>Do not call Miracle's <code>CLAuth/Authenticate</code> endpoint independently</strong> to mint your own token for anything still calling Miracle directly: Miracle allows only one active token per client, and doing so invalidates Odoo's token and silently breaks the Odoo &rarr; Miracle sync.</div>
+      </section>
+
+      <!-- 15. MIRACLE PROXY -->
+      <section class="sec" id="miracle-proxy">
+        <div class="sec-h"><span class="sec-n">15</span><h1>Miracle Account Proxy</h1></div>
+        <p class="lead">The app no longer calls Miracle Cloud ERP directly for these five calls — Odoo makes the Miracle call on your behalf and hands back Miracle's own response, untouched.</p>
+
+        <div class="call call-warn"><div class="call-t">Two rules that apply to every endpoint below — not repeated per endpoint</div>
+        <strong>1. Response shape is Miracle's, not this API's usual shape.</strong> A successful call returns <em>exactly</em> what Miracle Cloud ERP itself returned — same field names, same nesting, same <code>"IsError": false</code>. Nothing is renamed or reshaped. If <strong>Miracle</strong> rejects the call, that error is relayed exactly as Miracle sent it too: <code>{"IsError": true, "ErrorCode": "...", "Message": "..."}</code>. Only the very first check — is the Bearer token itself valid — still uses this API's normal <code>{"success": false, "message": "..."}</code> shape, since that's Odoo's own gate, not Miracle's.<br/><br/>
+        <strong>2. <code>miracle_account_id</code> is trusted as sent, not cross-checked.</strong> Every endpoint below requires it as a parameter — the same value returned in <code>customer.miracle_account_id</code> at <a href="#auth">§5 Login</a>. Odoo does <strong>not</strong> verify it belongs to the logged-in user — whatever value the app sends is what gets queried on Miracle. Always send the value that belongs to the currently logged-in user; this is a known, deliberate trade-off, not an oversight.
+        </div>
+
+        <h2>Account Balance</h2>
+        <div class="ep"><span class="ep-m ep-post">POST</span><span class="ep-u">/account_balance</span></div>
+        <p>Closing balance, balance type, and overdue amount.</p>
+        <div class="tw"><table>
+          <tr><th>Parameter</th><th>Required</th><th>Remarks</th></tr>
+          <tr><td class="p">user_id</td><td><span class="rq-y">Yes</span></td><td>Standard auth param.</td></tr>
+          <tr><td class="p">miracle_account_id</td><td><span class="rq-y">Yes</span></td><td>See rule 2 above.</td></tr>
+        </table></div>
+        <div class="code"><div class="code-cap">200 OK — Miracle's own response, untouched<button class="cp" onclick="cpCode(this)">Copy</button></div><pre><span class="ln"><span class="c-pun">{</span></span><span class="ln">  <span class="c-key">"Data":</span> <span class="c-pun">[</span> <span class="c-pun">{</span> <span class="c-key">"accid":</span> <span class="c-str">"1052"</span><span class="c-pun">,</span> <span class="c-key">"accbal":</span> <span class="c-num">141600.00</span><span class="c-pun">,</span> <span class="c-key">"baltype":</span> <span class="c-str">"DB"</span><span class="c-pun">,</span> <span class="c-key">"overdueamt":</span> <span class="c-num">141600.00</span> <span class="c-pun">}</span> <span class="c-pun">]</span><span class="c-pun">,</span></span><span class="ln">  <span class="c-key">"TotalRecords":</span> <span class="c-num">1</span><span class="c-pun">,</span> <span class="c-key">"IsError":</span> <span class="c-kw">false</span></span><span class="ln"><span class="c-pun">}</span></span></pre></div>
+
+        <h2>Get Account</h2>
+        <div class="ep"><span class="ep-m ep-get">GET</span><span class="ep-u">/get_account</span></div>
+        <p>Full account profile: credit terms, address, GST registration history.</p>
+        <div class="tw"><table>
+          <tr><th>Parameter</th><th>Required</th><th>Remarks</th></tr>
+          <tr><td class="p">user_id</td><td><span class="rq-y">Yes</span></td><td>Standard auth param.</td></tr>
+          <tr><td class="p">miracle_account_id</td><td><span class="rq-y">Yes</span></td><td>See rule 2 above.</td></tr>
+        </table></div>
+        <div class="code"><div class="code-cap">200 OK — Miracle's own response, untouched<button class="cp" onclick="cpCode(this)">Copy</button></div><pre><span class="ln"><span class="c-pun">{</span></span><span class="ln">  <span class="c-key">"DataModel":</span> <span class="c-pun">{</span></span><span class="ln">    <span class="c-key">"uniqueId":</span> <span class="c-str">"1052"</span><span class="c-pun">,</span> <span class="c-key">"accnm":</span> <span class="c-str">"RK Software"</span><span class="c-pun">,</span> <span class="c-key">"accgrpnm":</span> <span class="c-str">"Sundry Debtors"</span><span class="c-pun">,</span></span><span class="ln">    <span class="c-key">"panno":</span> <span class="c-str">"AUCPD9199B"</span><span class="c-pun">,</span> <span class="c-key">"crdays":</span> <span class="c-num">30</span><span class="c-pun">,</span> <span class="c-key">"crlimit":</span> <span class="c-num">100000.0</span><span class="c-pun">,</span> <span class="c-key">"balmethod":</span> <span class="c-str">"Bill to Bill"</span><span class="c-pun">,</span></span><span class="ln">    <span class="c-key">"addr":</span> <span class="c-pun">{</span> <span class="c-key">"citynm":</span> <span class="c-str">"RAJKOT"</span><span class="c-pun">,</span> <span class="c-key">"statenm":</span> <span class="c-str">"Gujarat"</span><span class="c-pun">,</span> <span class="c-key">"mob1":</span> <span class="c-str">"8888888888"</span> <span class="c-pun">}</span><span class="c-pun">,</span></span><span class="ln">    <span class="c-key">"regtypedet":</span> <span class="c-pun">[</span> <span class="c-pun">{</span> <span class="c-key">"regtype":</span> <span class="c-str">"Regular"</span><span class="c-pun">,</span> <span class="c-key">"regappdt":</span> <span class="c-str">"2017-07-01"</span> <span class="c-pun">}</span> <span class="c-pun">]</span></span><span class="ln">  <span class="c-pun">}</span><span class="c-pun">,</span> <span class="c-key">"IsError":</span> <span class="c-kw">false</span></span><span class="ln"><span class="c-pun">}</span></span></pre></div>
+
+        <h2>Account Ledger</h2>
+        <div class="ep"><span class="ep-m ep-post">POST</span><span class="ep-u">/account_ledger</span></div>
+        <p>Ledger totals (opening/closing balance, debit/credit) for a date range.</p>
+        <div class="tw"><table>
+          <tr><th>Parameter</th><th>Required</th><th>Remarks</th></tr>
+          <tr><td class="p">user_id</td><td><span class="rq-y">Yes</span></td><td>Standard auth param.</td></tr>
+          <tr><td class="p">miracle_account_id</td><td><span class="rq-y">Yes</span></td><td>See rule 2 above.</td></tr>
+          <tr><td class="p">fromdate</td><td><span class="rq-y">Yes</span></td><td><code>YYYY-MM-DD</code>, lowercase field name (Miracle's own convention for this call).</td></tr>
+          <tr><td class="p">todate</td><td><span class="rq-y">Yes</span></td><td><code>YYYY-MM-DD</code>.</td></tr>
+        </table></div>
+        <div class="call call-info"><div class="call-t">rptfield is fixed, not app-controlled</div>Odoo always requests the same column set: <code>accid, accnm, accgrpnm, opbal, totalcr, totaldb, clbal, citynm, statenm, gstin</code>. The app can't currently ask for a different set of columns.</div>
+        <div class="code"><div class="code-cap">200 OK — Miracle's own response, untouched<button class="cp" onclick="cpCode(this)">Copy</button></div><pre><span class="ln"><span class="c-pun">{</span></span><span class="ln">  <span class="c-key">"Data":</span> <span class="c-pun">[</span> <span class="c-pun">{</span> <span class="c-key">"accid":</span> <span class="c-str">"1052"</span><span class="c-pun">,</span> <span class="c-key">"accnm":</span> <span class="c-str">"RK Software"</span><span class="c-pun">,</span> <span class="c-key">"accgrpnm":</span> <span class="c-str">"Sundry Debtors"</span><span class="c-pun">,</span></span><span class="ln">    <span class="c-key">"opbal":</span> <span class="c-num">0.00</span><span class="c-pun">,</span> <span class="c-key">"totalcr":</span> <span class="c-num">0.00</span><span class="c-pun">,</span> <span class="c-key">"totaldb":</span> <span class="c-num">141600.00</span><span class="c-pun">,</span> <span class="c-key">"clbal":</span> <span class="c-num">141600.00</span><span class="c-pun">,</span></span><span class="ln">    <span class="c-key">"citynm":</span> <span class="c-str">"RAJKOT"</span><span class="c-pun">,</span> <span class="c-key">"statenm":</span> <span class="c-str">"Gujarat"</span><span class="c-pun">,</span> <span class="c-key">"gstin":</span> <span class="c-str">"24ABCDE1234F1Z6"</span> <span class="c-pun">}</span> <span class="c-pun">]</span><span class="c-pun">,</span></span><span class="ln">  <span class="c-key">"TotalRecords":</span> <span class="c-num">1</span><span class="c-pun">,</span> <span class="c-key">"IsError":</span> <span class="c-kw">false</span></span><span class="ln"><span class="c-pun">}</span></span></pre></div>
+
+        <h2>Account Voucher List</h2>
+        <div class="ep"><span class="ep-m ep-post">POST</span><span class="ep-u">/account_voucher_list</span></div>
+        <p>Every voucher (Sale, Purchase, Receipt, Payment, Credit/Debit Note...) for the account in a date range. Each row's <code>vouid</code> feeds into §14's <code>GetVoucher</code>-style detail or into Generate File below.</p>
+        <div class="tw"><table>
+          <tr><th>Parameter</th><th>Required</th><th>Remarks</th></tr>
+          <tr><td class="p">user_id</td><td><span class="rq-y">Yes</span></td><td>Standard auth param.</td></tr>
+          <tr><td class="p">miracle_account_id</td><td><span class="rq-y">Yes</span></td><td>See rule 2 above.</td></tr>
+          <tr><td class="p">fromDate</td><td><span class="rq-y">Yes</span></td><td><code>YYYY-MM-DD</code>. Note the capital <code>D</code> — different casing than <code>/account_ledger</code>'s <code>fromdate</code>; that's Miracle's own inconsistency, kept as-is.</td></tr>
+          <tr><td class="p">toDate</td><td><span class="rq-y">Yes</span></td><td><code>YYYY-MM-DD</code>.</td></tr>
+        </table></div>
+        <div class="code"><div class="code-cap">200 OK — Miracle's own response, untouched<button class="cp" onclick="cpCode(this)">Copy</button></div><pre><span class="ln"><span class="c-pun">{</span></span><span class="ln">  <span class="c-key">"Data":</span> <span class="c-pun">[</span></span><span class="ln">    <span class="c-pun">{</span> <span class="c-key">"voudate":</span> <span class="c-str">"2026-06-25"</span><span class="c-pun">,</span> <span class="c-key">"voutype":</span> <span class="c-str">"Sale"</span><span class="c-pun">,</span> <span class="c-key">"vouno":</span> <span class="c-str">"GT/3"</span><span class="c-pun">,</span> <span class="c-key">"amount":</span> <span class="c-num">14160.00</span><span class="c-pun">,</span> <span class="c-key">"vouid":</span> <span class="c-str">"625202620154d1543f31"</span> <span class="c-pun">}</span><span class="c-pun">,</span></span><span class="ln">    <span class="c-pun">{</span> <span class="c-key">"voudate":</span> <span class="c-str">"2026-06-27"</span><span class="c-pun">,</span> <span class="c-key">"voutype":</span> <span class="c-str">"BRct"</span><span class="c-pun">,</span> <span class="c-key">"vouno":</span> <span class="c-str">""</span><span class="c-pun">,</span> <span class="c-key">"amount":</span> <span class="c-num">5000.00</span><span class="c-pun">,</span> <span class="c-key">"vouid":</span> <span class="c-str">"6272026125208e2fcebd"</span> <span class="c-pun">}</span></span><span class="ln">  <span class="c-pun">]</span><span class="c-pun">,</span> <span class="c-key">"TotalRecords":</span> <span class="c-num">2</span><span class="c-pun">,</span> <span class="c-key">"IsError":</span> <span class="c-kw">false</span></span><span class="ln"><span class="c-pun">}</span></span></pre></div>
+
+        <h2>Generate File</h2>
+        <div class="ep"><span class="ep-m ep-post">POST</span><span class="ep-u">/generate_file</span></div>
+        <p>One endpoint, three report types, selected by <code>rptType</code> — matches how Miracle itself structures this call.</p>
+        <div class="tw"><table>
+          <tr><th>Parameter</th><th>Required</th><th>Remarks</th></tr>
+          <tr><td class="p">user_id</td><td><span class="rq-y">Yes</span></td><td>Standard auth param.</td></tr>
+          <tr><td class="p">miracle_account_id</td><td><span class="rq-c">RPT001 / RPT002</span></td><td>Used as <code>uniqueId</code> for these two. Not used for RPT003.</td></tr>
+          <tr><td class="p">rptType</td><td><span class="rq-y">Yes</span></td><td><code>RPT001</code> (account statement), <code>RPT002</code> (ageing/outstanding), or <code>RPT003</code> (voucher/invoice print).</td></tr>
+          <tr><td class="p">fromDate / toDate</td><td><span class="rq-c">RPT001 only</span></td><td><code>YYYY-MM-DD</code>.</td></tr>
+          <tr><td class="p">reportDate</td><td><span class="rq-c">RPT002 only</span></td><td><code>YYYY-MM-DD</code>, as-on date.</td></tr>
+          <tr><td class="p">voucher_id</td><td><span class="rq-c">RPT003 only</span></td><td>A <code>vouid</code> from §14's voucher list — used as <code>uniqueId</code> instead of the account id for this report type.</td></tr>
+        </table></div>
+        <div class="code"><div class="code-cap">200 OK — Miracle's own response, untouched<button class="cp" onclick="cpCode(this)">Copy</button></div><pre><span class="ln"><span class="c-pun">{</span> <span class="c-key">"DataModel":</span> <span class="c-str">"JVBERi0xLjQNCiWio4...(base64 PDF, truncated)..."</span><span class="c-pun">,</span> <span class="c-key">"IsError":</span> <span class="c-kw">false</span> <span class="c-pun">}</span></span></pre></div>
+        <div class="call call-error"><div class="call-t">DataModel here is a plain string, not an object</div>Miracle's own published API guide documents this response as <code>{"DataModel": {"fileName": "...", "pdfBase64": "..."}}</code> — a nested object. What Miracle <strong>actually</strong> returns in practice is <code>DataModel</code> as the base64 PDF content directly, with no <code>fileName</code>/<code>pdfBase64</code> wrapper (confirmed by testing). This is a documentation/reality mismatch on Miracle's side, not something Odoo changed — build against <code>response.DataModel</code> as the string itself, not <code>response.DataModel.pdfBase64</code>.</div>
+        <div class="call call-warn"><div class="call-t">voucher_id is trusted, same as miracle_account_id</div>RPT003 doesn't verify the requested voucher actually belongs to the calling account — same accepted trade-off as rule 2 above, extended to voucher ids for this one report type.</div>
+      </section>
+
+      <!-- 16. ERRORS -->
+      <section class="sec" id="errors">
+        <div class="sec-h"><span class="sec-n">16</span><h1>Error Reference</h1></div>
+        <p class="lead">These checks run before any endpoint's own logic, so they can come back from any route in this guide — <strong>except</strong> the five <a href="#miracle-proxy">§15 Miracle Account Proxy</a> endpoints, where only this table's checks use this shape; everything past that point on those five uses Miracle's own <code>{IsError, ErrorCode, Message}</code> shape instead.</p>
+        <div class="tw"><table>
+          <tr><th>Message</th><th>Cause</th><th>Fix</th></tr>
+          <tr><td class="errc">user_id (user_id) is required</td><td><code>user_id</code> missing from the request body.</td><td>Always send it, even though it's also implied by the token.</td></tr>
+          <tr><td class="errc">Missing or invalid token format</td><td>No <code>Authorization</code> header, or it doesn't start with <code>Bearer </code>.</td><td>Set the header exactly as <code>Authorization: Bearer &lt;token&gt;</code>.</td></tr>
+          <tr><td class="errc">Token is Expired</td><td>No matching, unexpired <code>partner.api.key</code> for that user_id + token pair.</td><td>Call <a href="#auth">5 Refresh Token</a>, or re-login if it's been unused for 7+ days.</td></tr>
+        </table></div>
+        <div class="call call-info"><div class="call-t">HTTP status codes</div>Most error responses still return HTTP 200 with <code>success: false</code> in the body — check <code>success</code>, not the HTTP status code, to detect failure.</div>
+      </section>
+
+      <div class="foot">
+        <b>Shri Hari App API</b> — Internal Integration Reference · shrihari_api module · Odoo 18
+      </div>
+    </main>
+  </div>
+
+<script>
+function cpCode(btn){
+  const pre=btn.closest('.code').querySelector('pre');
+  navigator.clipboard.writeText(pre.innerText).then(()=>{
+    const o=btn.textContent;btn.textContent='Copied';btn.style.background='#1E6B45';btn.style.color='#fff';
+    setTimeout(()=>{btn.textContent=o;btn.style.background='';btn.style.color='';},1600);
+  });
+}
+const links=document.querySelectorAll('.nav-l');
+const secs=document.querySelectorAll('.sec');
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{
+  if(e.isIntersecting){
+    links.forEach(l=>l.classList.remove('active'));
+    const a=document.querySelector('.nav-l[data-id="'+e.target.id+'"]');
+    if(a){a.classList.add('active');a.scrollIntoView({block:'nearest'});}
+  }
+});},{rootMargin:'-15% 0px -75% 0px'});
+secs.forEach(s=>obs.observe(s));
+</script>

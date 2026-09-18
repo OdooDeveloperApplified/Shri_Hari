@@ -20,6 +20,12 @@
                         string="Sync From Miracle"
                         class="btn-secondary"
                         invisible="not miracle_product_id or not is_miracle_product"/>
+
+                <button name="action_recalculate_sale_price"
+                        type="object"
+                        string="Recalculate Sale Price"
+                        class="btn-secondary"
+                        invisible="not miracle_single_pc_rate"/>
             </xpath>
 
             <!-- Insert new page inside existing notebook -->
@@ -27,19 +33,20 @@
                 <page string="Miracle Product">
                     <group>
                         <group>
-                            <field name="miracle_product_id"/>
+                            <field name="miracle_product_id" readonly="1"/>
                             <field name="miracle_group_id"/>
                             <field name="miracle_tax_string"/>
                             <field name="miracle_commodity_name" invisible="1"/>
-                            <field name="is_miracle_product"/>
+                            <field name="is_miracle_product" readonly="1"/>
                         </group>
                     </group>
                 </page>
             </xpath>
 
-            <!-- Insert miracle_cart_rate after Sale Price -->
+            <!-- Insert Miracle per-piece rate/MRP after Sale Price -->
             <xpath expr="//field[@name='list_price']/.." position="after">
-                <field name="miracle_cart_rate" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                <field name="miracle_single_pc_rate" widget="monetary" options="{'currency_field': 'currency_id'}" readonly="1"/>
+                <field name="miracle_mrp" widget="monetary" options="{'currency_field': 'currency_id'}" readonly="1"/>
             </xpath>
 
         </field>
@@ -55,6 +62,19 @@
         <field name="code">
             if records:
                 action = records.action_bulk_sync_miracle()
+        </field>
+    </record>
+
+    <!-- Server action to recalculate Sale Price for selected products, locally, without calling Miracle -->
+    <record id="action_recalculate_sale_price_server" model="ir.actions.server">
+        <field name="name">Recalculate Sale Price (from Miracle Single PC Rate)</field>
+        <field name="model_id" ref="product.model_product_template"/>
+        <field name="binding_model_id" ref="product.model_product_template"/>
+        <field name="binding_view_types">list,form</field>
+        <field name="state">code</field>
+        <field name="code">
+            if records:
+                action = records.action_recalculate_sale_price()
         </field>
     </record>
 

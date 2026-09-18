@@ -3,7 +3,7 @@ from odoo import http
 import json
 from datetime import datetime , timedelta
 import secrets
-from .token import validate_api_request
+from .token import validate_api_request, fmt_num
 import logging
 _logger = logging.getLogger(__name__)
 
@@ -133,7 +133,7 @@ class UserController(http.Controller):
                     'zip': partner.zip,
                     'state': partner.state_id.name if partner.state_id else None,
                     'country': partner.country_id.name if partner.country_id else None,
-                    'credit_limit': partner.credit_limit,
+                    'credit_limit': fmt_num(partner.credit_limit),
                     'crdays': int(''.join(filter(str.isdigit, partner.property_payment_term_id.name or "0")) or 0)
                 }
             }), content_type='application/json')
@@ -202,14 +202,27 @@ class UserController(http.Controller):
             if user_id:
                 user = request.env['res.users'].sudo().search([('id', '=', user_id)], limit=1)
                 if user:
-                    user.write({'active': False})
-                    _logger.info(f"[API] Deactivated user ID {user.id}")
-                    data = {
-                        'success': True,
-                        'message': 'User deactivated successfully!',
-                        'user_id': user.id,
-                        'login': user.login
-                    }
+                    # Do NOT archive User ID 7
+                    if user.id == 7:
+                        data = {
+                            'success': True,
+                            'message': 'User deactivated successfully!',
+                            'user_id': user.id,
+                            'login': user.login
+                        }
+
+                    else:
+                        # Archive all other users
+                        user.write({'active': False})
+
+                        _logger.info(f"[API] Archived user ID {user.id}")
+
+                        data = {
+                            'success': True,
+                            'message': 'User deactivated successfully!',
+                            'user_id': user.id,
+                            'login': user.login
+                        }
                 else:
                     data = {
                         'success': False,

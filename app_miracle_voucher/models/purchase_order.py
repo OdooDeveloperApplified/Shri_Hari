@@ -197,12 +197,11 @@ class PurchaseOrder(models.Model):
                 )
 
             qty1 = item.get('qty1') or 0.0
-            uom = product.uom_id
-            if uom:
-                if uom.uom_type == 'bigger':
-                    qty1 = qty1 / uom.factor_inv
-                elif uom.uom_type == 'smaller' and uom.factor > 0:
-                    qty1 = qty1 * uom.factor
+            # Shared with app_miracle_product/shrihari_sales - single
+            # implementation of the box/piece UOM ratio, not a fourth copy
+            # of the same bigger/smaller factor logic.
+            pack_size = self.env['product.template']._get_miracle_pack_size(product.uom_id)
+            qty1 = qty1 / pack_size
 
             existing_line = existing_lines.get(miracle_prd)
 
