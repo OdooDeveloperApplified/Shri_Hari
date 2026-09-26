@@ -12,6 +12,21 @@ class ResCompany(models.Model):
     miracle_post_product_url = fields.Char("Product Create URL", default="TPA/M2/V1/Product", readonly=True)
     
 
+    def _action_get_miracle_stock_ledger(self, miracle_product_ids=None):
+        self.ensure_one()
+        endpoint = self.miracle_product_ledger_url
+        payload = {
+            "fromdate": "2026-04-01",
+            "todate": "2027-03-31",
+            "rptfield": ["prdid", "opqty1", "recqty1", "iqty1", "clqty1"],
+            "rptfilter": {}
+        }
+        if miracle_product_ids:
+            payload["rptfilter"]["prdid"] = miracle_product_ids
+
+        stock_data = self.miracle_api_call(endpoint, "post", payload)
+        return self.env['product.template'].with_company(self)._sync_stock_from_ledger(stock_data)
+
     def _action_get_miracle_product_ledger(self):
         _logger.info("Starting to fetch product ledger from Miracle")
         endpoint = self.miracle_product_ledger_url
@@ -63,7 +78,7 @@ class ResCompany(models.Model):
         }
  
         product_data = self.miracle_api_call(endpoint, method, payload)
-        productTemplate = self.env['product.template']
+        productTemplate = self.env['product.template'].with_company(self)
         _logger.info("this is product data %s", product_data)
         return productTemplate._action_insert_miracle_product(product_data)
 

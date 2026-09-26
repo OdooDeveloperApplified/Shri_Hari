@@ -8,6 +8,7 @@
     'depends': ['base_setup','base', 'web'],
     'data': [
         'security/ir.model.access.csv',
+        'data/cron.xml',
         'views/res_company.xml',
         'views/res_config_settings.xml',
         'views/miracle_token_session.xml',

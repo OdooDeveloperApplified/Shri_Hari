@@ -78,4 +78,17 @@
         </field>
     </record>
 
+    <!-- Server action to test the stock-only Miracle ledger sync: selected
+         products -> only those, no selection -> every Miracle-synced product -->
+    <record id="action_sync_stock_from_miracle_ledger_server" model="ir.actions.server">
+        <field name="name">Sync Stock from Miracle</field>
+        <field name="model_id" ref="product.model_product_template"/>
+        <field name="binding_model_id" ref="product.model_product_template"/>
+        <field name="binding_view_types">list,form</field>
+        <field name="state">code</field>
+        <field name="code">
+            action = records.action_sync_stock_from_miracle_ledger()
+        </field>
+    </record>
+
 </odoo>

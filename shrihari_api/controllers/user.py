@@ -111,6 +111,8 @@ class UserController(http.Controller):
                 }
                 request.env['partner.api.key'].sudo().create(access_token_dict)
 
+            # Stock sync has been moved to products_by_category for live updates
+
             partner = user.partner_id.with_company(user.company_id)
 
             # If no exception, login is successful

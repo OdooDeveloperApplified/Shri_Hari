@@ -8,7 +8,7 @@
         <field name="arch" type="xml">
 
             <xpath expr="//header" position="inside">
-                <button name="action_upload_purchase_to_miracle"
+                <!-- <button name="action_upload_purchase_to_miracle"
                         string="Upload to Miracle"
                         type="object"
                         class="btn-primary"
@@ -18,7 +18,7 @@
                         type="object"
                         string="Sync From Miracle"
                         class="btn-secondary"
-                        invisible="(not miracle_purchase_quotation_id and not miracle_purchase_order_id) or not is_miracle_voucher"/>
+                        invisible="(not miracle_purchase_quotation_id and not miracle_purchase_order_id) or not is_miracle_voucher"/> -->
             </xpath>
             <xpath expr="//notebook" position="inside">
                 <page string="Miracle Voucher">

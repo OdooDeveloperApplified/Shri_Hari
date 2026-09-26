@@ -235,15 +235,14 @@ class ProductTemplate(models.Model):
     def _sync_miracle_stock(self, item):
         closing_qty = item.get('clqty1') or 0.0
         
-        if self.type != 'consu' or not self.is_storable:
+        # We only want to update stock for storable products
+        if not self.is_storable:
             return
 
-        uom = self.uom_id
-        if uom:
-            if uom.uom_type == 'bigger':
-                closing_qty = closing_qty / uom.factor_inv
-            elif uom.uom_type == 'smaller' and uom.factor > 0:
-                closing_qty = closing_qty * uom.factor
+        # Convert Miracle's smallest piece quantity into Odoo's UOM quantity
+        pack_size = self.env['product.template']._get_miracle_pack_size(self.uom_id)
+        if pack_size:
+            closing_qty = closing_qty / pack_size
 
         product = self.product_variant_id
         if not product:
@@ -258,11 +257,48 @@ class ProductTemplate(models.Model):
 
         StockQuant = self.env['stock.quant']
 
-        current_qty = StockQuant._get_available_quantity(product, location)
+        # Raw on-hand, not _get_available_quantity() (which subtracts
+        # reserved_quantity). Miracle's closing qty is a total on-hand
+        # figure, so comparing it against "available" leaves a
+        # reservation-sized error behind whenever anything else (e.g. a
+        # confirmed-but-undelivered order) has stock reserved for this
+        # product at sync time.
+        current_qty = sum(StockQuant.sudo()._gather(product, location).mapped('quantity'))
         diff_qty = closing_qty - current_qty
 
         if diff_qty != 0:
             StockQuant._update_available_quantity(product, location, diff_qty)
+
+    def _sync_stock_from_ledger(self, stock_data):
+
+        if stock_data.get("IsError"):
+            _logger.error("Miracle stock ledger fetch failed: %s", stock_data.get("Message"))
+            return {"updated": 0, "skipped": [], "error": stock_data.get("Message")}
+
+        updated = 0
+        skipped = []
+
+        for item in stock_data.get('Data', []):
+            miracle_id = item.get('prdid')
+            if not miracle_id:
+                continue
+
+            product = self.search([
+                ('miracle_product_id', '=', miracle_id),
+                ('is_miracle_product', '=', True)
+            ], limit=1)
+
+            if not product:
+                skipped.append(miracle_id)
+                continue
+
+            product._sync_miracle_stock(item)
+            updated += 1
+
+        if skipped:
+            _logger.warning("Miracle stock ledger: no matching Odoo product for Miracle id(s) %s", skipped)
+
+        return {"updated": updated, "skipped": skipped}
 
     def _action_insert_miracle_product(self, product_data):
 
@@ -622,6 +658,38 @@ class ProductTemplate(models.Model):
         return company.miracle_notification(
             message,
             "success" if updated else "warning"
+        )
+
+    def action_sync_stock_from_miracle_ledger(self):
+        """Manual test button for the stock-only ledger sync
+        (company._action_get_miracle_stock_ledger / _sync_stock_from_ledger).
+        Selected products -> refresh only those (via their miracle_product_id).
+        No selection -> refresh every Miracle-synced product's stock.
+        Never touches price/UOM/tax/category - see _sync_stock_from_ledger.
+        """
+        company = self.env.company
+
+        if self:
+            miracle_ids = [p.miracle_product_id for p in self if p.miracle_product_id]
+            if not miracle_ids:
+                return company.miracle_notification(
+                    "None of the selected products are synced with Miracle.",
+                    "warning"
+                )
+            result = company._action_get_miracle_stock_ledger(miracle_product_ids=miracle_ids)
+        else:
+            result = company._action_get_miracle_stock_ledger()
+
+        if result.get("error"):
+            return company.miracle_notification(result["error"], "danger")
+
+        message = f"Stock updated for {result['updated']} product(s)."
+        if result.get("skipped"):
+            message += f" {len(result['skipped'])} Miracle id(s) had no matching product in Odoo."
+
+        return company.miracle_notification(
+            message,
+            "success" if result["updated"] else "warning"
         )
 
     def action_sync_from_miracle(self, api_response=None):

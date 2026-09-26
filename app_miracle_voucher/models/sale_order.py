@@ -9,9 +9,9 @@ class SaleOrder(models.Model):
     _inherit = 'sale.order'
 
     # miracle_voucher_id = fields.Char(string="Miracle Voucher ID", readonly=True,copy=False)
-    miracle_sale_quotation_id = fields.Char(string="Miracle Quotation ID", readonly=True,copy=False)
-    miracle_sale_order_id = fields.Char(string="Miracle Order ID", readonly=True,copy=False)
-    is_miracle_voucher = fields.Boolean(string="Is Miracle Voucher",readonly=True,copy=False)
+    miracle_sale_quotation_id = fields.Char(string="Miracle Quotation ID",copy=False)
+    miracle_sale_order_id = fields.Char(string="Miracle Order ID",copy=False)
+    is_miracle_voucher = fields.Boolean(string="Is Miracle Voucher",copy=False)
 
     def action_upload_sale_to_miracle(self):
         if self.env.context.get('skip_miracle_sync'):
@@ -136,16 +136,22 @@ class SaleOrder(models.Model):
         self.ensure_one()
         company = self.env.company
 
-        if self.state in ['draft']:
-            miracle_id = self.miracle_sale_quotation_id
-        elif self.state in ['sale']:
-            miracle_id = self.miracle_sale_order_id
-        else:
-            return company.miracle_notification(
-                "Only Quotation or Confirmed Orders can be synced.",
-                "danger"
-            )
-
+        # We no longer check the state to determine which ID to use.
+        # When a webhook creates a new order, it is in 'draft' state, but the webhook
+        # populates the 'miracle_sale_order_id' field. If we strictly check for 'sale'
+        # state here, the sync will silently fail to find the ID. 
+        # 
+        # if self.state in ['draft']:
+        #     miracle_id = self.miracle_sale_quotation_id
+        # elif self.state in ['sale']:
+        #     miracle_id = self.miracle_sale_order_id
+        # else:
+        #     return company.miracle_notification(
+        #         "Only Quotation or Confirmed Orders can be synced.",
+        #         "danger"
+        #     )
+        
+        miracle_id = self.miracle_sale_order_id or self.miracle_sale_quotation_id
         if not miracle_id:
             return company.miracle_notification(
                 "No Miracle ID found to sync.",
@@ -187,6 +193,8 @@ class SaleOrder(models.Model):
             order_date = data.get('quotdt')
         elif voucher_type == 'OS':
             order_date = data.get('orddt')
+        elif voucher_type == 'HS':
+            order_date = data.get('chdt')
         else:
             return company.miracle_notification(
                 "Quotation date or Order date is not found",

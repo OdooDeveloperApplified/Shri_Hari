@@ -7,6 +7,29 @@ import logging
 
 _logger = logging.getLogger(__name__)
 
+
+def _get_applied_slab(order, line):
+    """Which pricing slab (product.pricelist.item) actually priced this line,
+    using Odoo's own rule-selection (_get_product_price_rule) so it can never
+    disagree with what the order was really charged."""
+    if not order.pricelist_id or not line.product_id:
+        return None
+
+    _price, rule_id = order.pricelist_id._get_product_price_rule(
+        line.product_id, line.product_uom_qty, uom=line.product_uom,
+        date=order.date_order or fields.Date.context_today(order)
+    )
+    if not rule_id:
+        return None
+
+    item = request.env['product.pricelist.item'].sudo().browse(rule_id)
+    return {
+        "slab_id": item.id,
+        "min_qty": fmt_num(item.min_quantity),
+        "discount_type": item.compute_price,  # 'fixed' or 'percentage'
+        "discount_percent": fmt_num(item.percent_price) if item.compute_price == 'percentage' else None,
+    }
+
 ############### API to list product categories present in odoo databse in mobile app ##########################
 class ProductCategoryAPI(http.Controller):
 
@@ -90,6 +113,21 @@ class ProductAPI(http.Controller):
         # Fetch products for the given category (including child categories) or all products if no category_id
         products = request.env['product.template'].sudo().search(domain)
 
+        # --- LIVE STOCK SYNC FOR MOBILE REFRESH ---
+        try:
+            if category_id:
+                # Targeted sync: lightning fast for single category refresh
+                miracle_ids = [p.miracle_product_id for p in products if p.miracle_product_id]
+                if miracle_ids:
+                    user.company_id._action_get_miracle_stock_ledger(miracle_product_ids=miracle_ids)
+            else:
+                # Full sync: if they pull to refresh the entire catalog
+                user.company_id._action_get_miracle_stock_ledger()
+        except Exception as e:
+            _logger.warning("Miracle stock ledger refresh failed in products_by_category: %s", e)
+        # ------------------------------------------
+
+
         # Use the single default company for the user
         company = user.company_id or request.env.company
         StockQuant = request.env['stock.quant']
@@ -127,6 +165,7 @@ class ProductAPI(http.Controller):
                 # _logger.info("this is pricelist iteams %s and its name %s",pricelist_items, pricelist_items.name)
 
                 currency_symbol = company.currency_id.symbol or ''
+                pack_size = request.env['product.template']._get_miracle_pack_size(product.uom_id)
                 for item in pricelist_items:
                     # Single source of truth for slab pricing: the same
                     # method Odoo uses to price a real order line off this
@@ -142,13 +181,18 @@ class ProductAPI(http.Controller):
                         single_piece_price = product.miracle_mrp
 
                     if slab_price > 0:
+                        # Discounted per-piece price (not the plain
+                        # single_piece_price field above, which is the
+                        # undiscounted MRP for percentage rules) - what the
+                        # message should actually advertise to the customer.
+                        piece_price = slab_price / pack_size if pack_size else slab_price
                         pricing_slabs.append({
                             "min_qty": fmt_num(item.min_quantity),
                             "price": fmt_num(slab_price),
                             "discount_type": item.compute_price,  # 'fixed' or 'percentage'
                             "single_piece_price": fmt_num(single_piece_price),
                             "discount_percent": fmt_num(item.percent_price) if item.compute_price == 'percentage' else None,
-                            "discount_message": f"Buy {int(item.min_quantity)}+ at {currency_symbol}{slab_price}/box"
+                            "discount_message": f"Buy {int(item.min_quantity)}+ at {currency_symbol}{fmt_num(piece_price)}/piece"
                         })
                     # _logger.info("this are pricing slabs-------> %s",pricing_slabs)
 
@@ -202,95 +246,7 @@ class SaleCaptureCreateAPI(http.Controller):
         user, error_response = validate_api_request(request, kwargs)
         if error_response:
             return error_response
-        
-        ##### Code to select customers from contacts ###############
-
-        # partner_obj = request.env['res.partner'].sudo()
-      
-        # customer_id = kwargs.get('customer_id')
-
-        # if customer_id:
-        #     # Use existing
-        #     partner = partner_obj.browse(int(customer_id))
-        #     if not partner.exists():
-        #         return Response(json.dumps({
-        #             "success": False,
-        #             "message": "Invalid customer_id"
-        #         }), content_type='application/json')
-
-        # else:
-        #     mobile = kwargs.get('mobile')
-        #     email = kwargs.get('email')
-        #     name = kwargs.get('customer_name')
-        #     company_name = kwargs.get('company_name')
-
-        #     partner = None
-
-        #     # SEARCH LOGIC
-
-        #     # 1. Mobile match
-        #     if mobile:
-        #         partner = partner_obj.search([('mobile', '=', mobile)], limit=1)
-
-        #     # 2. Email match
-        #     if not partner and email:
-        #         partner = partner_obj.search([('email', '=', email)], limit=1)
-
-        #     # 3. Name + Company match
-        #     if not partner and name:
-        #         if company_name:
-        #             partner = partner_obj.search([
-        #                 ('name', '=', name),
-        #                 ('parent_id.name', '=', company_name)
-        #             ], limit=1)
-        #         else:
-        #             partner = partner_obj.search([
-        #                 ('name', '=', name),
-        #                 ('parent_id', '=', False)
-        #             ], limit=1)
-
-        #     # CREATE NEW IF NOT FOUND
-        #     if not partner:
-
-        #         if not name:
-        #             return Response(json.dumps({
-        #                 "success": False,
-        #                 "message": "customer_name is required"
-        #             }), content_type='application/json')
-
-        #         # Handle company
-        #         parent_partner = None
-        #         if company_name:
-        #             parent_partner = partner_obj.search([
-        #                 ('name', '=', company_name),
-        #                 ('is_company', '=', True)
-        #             ], limit=1)
-
-        #             if not parent_partner:
-        #                 parent_partner = partner_obj.create({
-        #                     'name': company_name,
-        #                     'is_company': True
-        #                 })
-
-        #         customer_vals = {
-        #             'name': name,
-        #             'parent_id': parent_partner.id if parent_partner else False,
-        #             'street': kwargs.get('street'),
-        #             'street2': kwargs.get('street2'),
-        #             'city': kwargs.get('city'),
-        #             'zip': kwargs.get('zip'),
-        #             'country_id': int(kwargs.get('country_id')) if kwargs.get('country_id') else False,
-        #             'state_id': int(kwargs.get('state_id')) if kwargs.get('state_id') else False,
-        #             'mobile': mobile,
-        #             'email': email,
-        #         }
-        #         partner = partner_obj.create(customer_vals)
-        #         _logger.info(f"New customer created: {partner.name}")
-
-        #     else:
-        #         _logger.info(f"Existing customer used: {partner.name}")
-
-        # ALWAYS use logged-in user's partner as customer
+    
         partner = user.partner_id
 
         if not partner:
@@ -302,20 +258,6 @@ class SaleCaptureCreateAPI(http.Controller):
         # Create environment bound to the authenticated user so context (allowed_company_ids) is correct
         user_env = request.env(user=user)
 
-        # CREATE NATIVE SALE ORDER INSTEAD (Sale Capture commented out)
-        # sale_capture = user_env['sale.capture'].sudo().create({
-        #     'user_id': user.id,
-        #     'customer_id': partner.id,
-        #     'customer_street': partner.street,
-        #     'customer_street2': partner.street2,
-        #     'customer_city': partner.city,
-        #     'customer_zip': partner.zip,
-        #     'customer_country_id': partner.country_id.id,
-        #     'customer_state_id': partner.state_id.id,
-        #     'customer_mobile': partner.mobile,
-        #     'customer_email': partner.email,
-        # })
-
         sale_order_vals = {
             'partner_id': partner.id,
             'user_id': user.id,
@@ -324,13 +266,50 @@ class SaleCaptureCreateAPI(http.Controller):
         if user.company_id.mobile_app_pricelist_id:
             sale_order_vals['pricelist_id'] = user.company_id.mobile_app_pricelist_id.id
 
+        # --- 1. GET LIVE STOCK FROM MIRACLE FIRST ---
+        # Fetch fresh stock from Miracle before processing the order
+        miracle_ids = []
+        all_product_ids = []
+        temp_idx = 0
+        while True:
+            pid = kwargs.get(f'line_product_id[{temp_idx}]')
+            if not pid:
+                break
+            prod = user_env['product.product'].sudo().browse(int(pid))
+            if prod.exists():
+                all_product_ids.append(prod.id)
+                if prod.miracle_product_id:
+                    miracle_ids.append(prod.miracle_product_id)
+            temp_idx += 1
+        
+        if miracle_ids:
+            try:
+                user.company_id._action_get_miracle_stock_ledger(miracle_product_ids=miracle_ids)
+            except Exception as e:
+                _logger.warning("Failed to refresh Miracle stock before checkout: %s", e)
+                
+        if all_product_ids:
+            try:
+                # Lock all products at once in a consistent order to prevent deadlocks
+                sorted_pids = tuple(sorted(list(set(all_product_ids))))
+                user_env.cr.execute("SELECT id FROM product_product WHERE id IN %s ORDER BY id FOR UPDATE", (sorted_pids,))
+            except Exception as e:
+                request.env.cr.rollback()
+                return Response(json.dumps({
+                    "success": False,
+                    "message": "The server is currently processing another high-priority order for these items. Please try placing your order again in a few seconds."
+                }), content_type='application/json')
+        # ---------------------------------------------
+
         # READ ORDER LINES
         order_lines = []
         index = 0
+        
+        stock_issues = []
+        stock_availability = []
 
         while True:
             product_id = kwargs.get(f'line_product_id[{index}]')
-            # _logger.info("thissssss is product_id %s",product_id)
             qty = kwargs.get(f'line_qty[{index}]')
             price = kwargs.get(f'line_price[{index}]')
 
@@ -347,7 +326,6 @@ class SaleCaptureCreateAPI(http.Controller):
                 }), content_type='application/json')
 
             product = user_env['product.product'].sudo().browse(int(product_id))
-            # _logger.info("thissss is product %s",product)
             if not product.exists():
                 return Response(json.dumps({
                     "success": False,
@@ -362,11 +340,18 @@ class SaleCaptureCreateAPI(http.Controller):
             ])
             available_qty = sum(quants.mapped('quantity')) - sum(quants.mapped('reserved_quantity'))
             
-            if available_qty < qty:
-                return Response(json.dumps({
-                    "success": False,
-                    "message": f"Not enough stock for product {product.display_name}. Available: {available_qty}, Requested: {qty}"
-                }), content_type='application/json')
+            is_available = available_qty >= qty
+            
+            stock_availability.append({
+                "product_id": product.id,
+                "product_name": product.display_name,
+                "requested_qty": qty,
+                "available_qty": available_qty,
+                "is_available": is_available
+            })
+            
+            if not is_available:
+                stock_issues.append(product.display_name)
             # --------------------------------
 
             if not price:
@@ -378,13 +363,6 @@ class SaleCaptureCreateAPI(http.Controller):
                     )
                 else:
                     price = product.list_price
-
-            # order_lines.append({
-            #     'capture_id': sale_capture.id,
-            #     'product_id': product.id,
-            #     'product_uom_qty': qty,
-            #     'price_unit': price,
-            # })
             
             sale_order_vals['order_line'].append((0, 0, {
                 'product_id': product.id,
@@ -393,6 +371,13 @@ class SaleCaptureCreateAPI(http.Controller):
             }))
 
             index += 1
+
+        if stock_issues:
+            return Response(json.dumps({
+                "success": False,
+                "message": "One or more products in your cart do not have enough stock.",
+                "stock_availability": stock_availability
+            }), content_type='application/json')
 
         if not sale_order_vals['order_line']:
             # sale_capture.unlink()
@@ -411,6 +396,7 @@ class SaleCaptureCreateAPI(http.Controller):
             # 1. Automate Delivery Validation
             for picking in sale_order.picking_ids:
                 picking.with_context(skip_miracle_sync=True).action_assign()
+
                 for move_line in picking.move_ids:
                     move_line.quantity = move_line.product_uom_qty
                 
@@ -430,7 +416,7 @@ class SaleCaptureCreateAPI(http.Controller):
             cron_job = request.env.ref('app_miracle_voucher.cron_sync_miracle_deliveries', raise_if_not_found=False)
             if cron_job:
                 cron_job.sudo()._trigger()
-            
+
         except Exception as e:
             return Response(json.dumps({
                 "success": False,
@@ -439,7 +425,6 @@ class SaleCaptureCreateAPI(http.Controller):
 
         # RESPONSE
         sale_orders = []
-        # for so in sale_capture.sale_order_ids:
         sale_orders.append({
             "id": sale_order.id,
             "name": sale_order.name,
@@ -470,13 +455,6 @@ class SaleCaptureListAPI(http.Controller):
 
         base_url = request.httprequest.host_url.rstrip('/')
 
-        # sale_captures = request.env['sale.capture'].sudo().search([], order='id desc')
-        # if not sale_captures:
-        #     return Response(json.dumps({
-        #         "success": False,
-        #         "message": "No Sale Capture records found"
-        #     }), content_type='application/json')
-
         sale_orders = request.env['sale.order'].sudo().search([('user_id', '=', user.id)], order='id desc')
         if not sale_orders:
             return Response(json.dumps({
@@ -486,12 +464,10 @@ class SaleCaptureListAPI(http.Controller):
 
         result = []
 
-        # for record in sale_captures:
         for record in sale_orders:
 
             # Prepare lines
             lines = []
-            # for line in record.line_ids:
             for line in record.order_line:
                 lines.append({
                     "product_id": line.product_id.id,
@@ -508,6 +484,7 @@ class SaleCaptureListAPI(http.Controller):
                 "customer": record.partner_id.name,
                 "capture_date": str(record.date_order),
                 "state": record.state,
+                "grand_total": fmt_num(record.amount_total),
                 "lines": lines,
             })
 
@@ -616,6 +593,7 @@ class SaleCaptureSaleOrderLineAPI(http.Controller):
                 "quantity": fmt_num(line.product_uom_qty),
                 "price_unit": fmt_num(line.price_unit),
                 "subtotal": fmt_num(line.price_subtotal),
+                "slab_applied": _get_applied_slab(sale_order, line),
                 "image_url": f"{base_url}/web/image/product.template/{line.product_id.id}/image_1920??t={int(datetime.now().timestamp())}"
             })
 
@@ -816,103 +794,103 @@ class MiracleProxyAPI(http.Controller):
 
         return call_miracle_relay(company, company.miracle_account_ledger_url, 'post', payload)
 
-    # @http.route('/account_voucher_list', type='http', auth='public', cors='*', methods=['POST'], csrf=False)
-    # def get_account_voucher_list(self, **kwargs):
+    @http.route('/account_voucher_list', type='http', auth='public', cors='*', methods=['POST'], csrf=False)
+    def get_account_voucher_list(self, **kwargs):
 
-    #     user, company, miracle_account_id, error_response = resolve_miracle_account(request, kwargs)
-    #     if error_response:
-    #         return error_response
+        user, company, miracle_account_id, error_response = resolve_miracle_account(request, kwargs)
+        if error_response:
+            return error_response
 
-    #     # Note: Miracle's own field names for this call are camelCase
-    #     # (fromDate/toDate/rptFilter), unlike AccountLedger's lowercase
-    #     # (fromdate/todate/rptfilter) - kept exactly as Miracle documents
-    #     # it rather than normalizing the two to match each other.
-    #     from_date = kwargs.get('fromDate')
-    #     to_date = kwargs.get('toDate')
+        # Note: Miracle's own field names for this call are camelCase
+        # (fromDate/toDate/rptFilter), unlike AccountLedger's lowercase
+        # (fromdate/todate/rptfilter) - kept exactly as Miracle documents
+        # it rather than normalizing the two to match each other.
+        from_date = kwargs.get('fromDate')
+        to_date = kwargs.get('toDate')
 
-    #     if not from_date or not to_date:
-    #         return Response(json.dumps({
-    #             "IsError": True,
-    #             "ErrorCode": "MISSINGDATE",
-    #             "Message": "fromDate and toDate are required."
-    #         }), content_type='application/json')
+        if not from_date or not to_date:
+            return Response(json.dumps({
+                "IsError": True,
+                "ErrorCode": "MISSINGDATE",
+                "Message": "fromDate and toDate are required."
+            }), content_type='application/json')
 
-    #     payload = {
-    #         "fromDate": from_date,
-    #         "toDate": to_date,
-    #         "rptFilter": {
-    #             "accid": [miracle_account_id]
-    #         }
-    #     }
+        payload = {
+            "fromDate": from_date,
+            "toDate": to_date,
+            "rptFilter": {
+                "accid": [miracle_account_id]
+            }
+        }
 
-    #     return call_miracle_relay(company, 'TPA/M2/V1/AccountVoucherList', 'post', payload)
+        return call_miracle_relay(company, 'TPA/M2/V1/AccountVoucherList', 'post', payload)
 
-    # @http.route('/generate_file', type='http', auth='public', cors='*', methods=['POST'], csrf=False)
-    # def generate_file(self, **kwargs):
+    @http.route('/generate_file', type='http', auth='public', cors='*', methods=['POST'], csrf=False)
+    def generate_file(self, **kwargs):
 
-    #     user, company, miracle_account_id, error_response = resolve_miracle_account(request, kwargs)
-    #     if error_response:
-    #         return error_response
+        user, company, miracle_account_id, error_response = resolve_miracle_account(request, kwargs)
+        if error_response:
+            return error_response
 
-    #     rpt_type = kwargs.get('rptType')
+        rpt_type = kwargs.get('rptType')
 
-    #     if rpt_type == 'RPT001':
-    #         # Account Statement PDF - keyed by the caller's own account.
-    #         from_date = kwargs.get('fromDate')
-    #         to_date = kwargs.get('toDate')
-    #         if not from_date or not to_date:
-    #             return Response(json.dumps({
-    #                 "IsError": True,
-    #                 "ErrorCode": "MISSINGDATE",
-    #                 "Message": "fromDate and toDate are required for RPT001."
-    #             }), content_type='application/json')
-    #         payload = {
-    #             "rptType": "RPT001",
-    #             "uniqueId": miracle_account_id,
-    #             "fromDate": from_date,
-    #             "toDate": to_date,
-    #         }
+        if rpt_type == 'RPT001':
+            # Account Statement PDF - keyed by the caller's own account.
+            from_date = kwargs.get('fromDate')
+            to_date = kwargs.get('toDate')
+            if not from_date or not to_date:
+                return Response(json.dumps({
+                    "IsError": True,
+                    "ErrorCode": "MISSINGDATE",
+                    "Message": "fromDate and toDate are required for RPT001."
+                }), content_type='application/json')
+            payload = {
+                "rptType": "RPT001",
+                "uniqueId": miracle_account_id,
+                "fromDate": from_date,
+                "toDate": to_date,
+            }
 
-    #     elif rpt_type == 'RPT002':
-    #         # Ageing / Outstanding Report PDF - also keyed by the account.
-    #         report_date = kwargs.get('reportDate')
-    #         if not report_date:
-    #             return Response(json.dumps({
-    #                 "IsError": True,
-    #                 "ErrorCode": "MISSINGDATE",
-    #                 "Message": "reportDate is required for RPT002."
-    #             }), content_type='application/json')
-    #         payload = {
-    #             "rptType": "RPT002",
-    #             "uniqueId": miracle_account_id,
-    #             "reportDate": report_date,
-    #         }
+        elif rpt_type == 'RPT002':
+            # Ageing / Outstanding Report PDF - also keyed by the account.
+            report_date = kwargs.get('reportDate')
+            if not report_date:
+                return Response(json.dumps({
+                    "IsError": True,
+                    "ErrorCode": "MISSINGDATE",
+                    "Message": "reportDate is required for RPT002."
+                }), content_type='application/json')
+            payload = {
+                "rptType": "RPT002",
+                "uniqueId": miracle_account_id,
+                "reportDate": report_date,
+            }
 
-    #     elif rpt_type == 'RPT003':
-    #         # Voucher / Invoice Print PDF - keyed by a VOUCHER id, not an
-    #         # account id. Trusted as sent by the app, same accepted-risk
-    #         # basis as miracle_account_id elsewhere in this file - see
-    #         # resolve_miracle_account()'s docstring for the reasoning and
-    #         # where to add a check later if this ever needs closing.
-    #         voucher_id = kwargs.get('voucher_id') or kwargs.get('uniqueId')
-    #         if not voucher_id:
-    #             return Response(json.dumps({
-    #                 "IsError": True,
-    #                 "ErrorCode": "MISSINGVOUCHER",
-    #                 "Message": "voucher_id is required for RPT003."
-    #             }), content_type='application/json')
-    #         payload = {
-    #             "rptType": "RPT003",
-    #             "uniqueId": voucher_id,
-    #         }
+        elif rpt_type == 'RPT003':
+            # Voucher / Invoice Print PDF - keyed by a VOUCHER id, not an
+            # account id. Trusted as sent by the app, same accepted-risk
+            # basis as miracle_account_id elsewhere in this file - see
+            # resolve_miracle_account()'s docstring for the reasoning and
+            # where to add a check later if this ever needs closing.
+            voucher_id = kwargs.get('voucher_id') or kwargs.get('uniqueId')
+            if not voucher_id:
+                return Response(json.dumps({
+                    "IsError": True,
+                    "ErrorCode": "MISSINGVOUCHER",
+                    "Message": "voucher_id is required for RPT003."
+                }), content_type='application/json')
+            payload = {
+                "rptType": "RPT003",
+                "uniqueId": voucher_id,
+            }
 
-    #     else:
-    #         return Response(json.dumps({
-    #             "IsError": True,
-    #             "ErrorCode": "BADRPTTYPE",
-    #             "Message": "rptType must be one of RPT001, RPT002, RPT003."
-    #         }), content_type='application/json')
+        else:
+            return Response(json.dumps({
+                "IsError": True,
+                "ErrorCode": "BADRPTTYPE",
+                "Message": "rptType must be one of RPT001, RPT002, RPT003."
+            }), content_type='application/json')
 
-    #     return call_miracle_relay(company, 'TPA/M2/V1/GenerateFile', 'post', payload)
+        return call_miracle_relay(company, 'TPA/M2/V1/GenerateFile', 'post', payload)
 
 

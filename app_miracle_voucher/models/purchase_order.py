@@ -160,7 +160,7 @@ class PurchaseOrder(models.Model):
             order_date = data.get('quotdt')
         elif voucher_type == 'OP':
             order_date = data.get('orddt')
-        elif voucher_type == 'HP':
+        elif voucher_type in ['HP', 'PP']:
             order_date = data.get('voudt')
         else:
             return company.miracle_notification(

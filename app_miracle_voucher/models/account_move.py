@@ -243,7 +243,7 @@ class AccountMove(models.Model):
         data = response.get('DataModel')
         if not data:
             return company.miracle_notification(
-                "Voucher not found in Miracle."
+                "Voucher not found in Miracle.",
                 "danger"
             )
 

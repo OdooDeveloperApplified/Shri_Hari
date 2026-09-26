@@ -1,4 +1,4 @@
-from odoo import models, fields
+from odoo import models, fields , api
 import requests
 from datetime import timedelta
 from odoo.exceptions import UserError
@@ -245,6 +245,17 @@ class ResCompany(models.Model):
     # ========================================
     # Generate Token (Create Session)
     # ========================================
+    @api.model
+    def _cron_refresh_miracle_tokens(self):
+        """Automatically refresh Miracle tokens every 15 mins via scheduled action."""
+        companies = self.search([('miracle_base_url', '!=', False), ('miracle_clientid', '!=', False)])
+        for company in companies:
+            try:
+                company.action_generate_miracle_token()
+                _logger.info("Cron: Successfully refreshed Miracle token for company %s", company.name)
+            except Exception as e:
+                _logger.error("Cron: Failed to refresh Miracle token for company %s: %s", company.name, str(e))
+
     def action_generate_miracle_token(self):
         self.ensure_one()
 
