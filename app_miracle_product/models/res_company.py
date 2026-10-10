@@ -18,13 +18,13 @@ class ResCompany(models.Model):
         payload = {
             "fromdate": "2026-04-01",
             "todate": "2027-03-31",
-            "rptfield": ["prdid", "opqty1", "recqty1", "iqty1", "clqty1"],
+            "rptfield": ["prdid", "opqty1", "recqty1", "iqty1", "clqty1", "clqty2"],
             "rptfilter": {}
         }
         if miracle_product_ids:
             payload["rptfilter"]["prdid"] = miracle_product_ids
 
-        stock_data = self.miracle_api_call(endpoint, "post", payload)
+        stock_data = self.miracle_api_call(endpoint, "post", payload, trigger_label="Stock Ledger Sync")
         return self.env['product.template'].with_company(self)._sync_stock_from_ledger(stock_data)
 
     def _action_get_miracle_product_ledger(self):
@@ -60,7 +60,7 @@ class ResCompany(models.Model):
                 # "opqty2",
                 # "recqty2",
                 # "iqty2",
-                # "clqty2",
+                "clqty2",
                 # "opqty3",
                 # "recqty3",
                 # "iqty3",
@@ -77,18 +77,18 @@ class ResCompany(models.Model):
             "rptfilter": {}
         }
  
-        product_data = self.miracle_api_call(endpoint, method, payload)
-        productTemplate = self.env['product.template'].with_company(self)
+        product_data = self.miracle_api_call(endpoint, method, payload, trigger_label="Product Ledger Full Sync")
+        productTemplate = self.env['product.template']
         _logger.info("this is product data %s", product_data)
         return productTemplate._action_insert_miracle_product(product_data)
 
-    def _action_send_product_to_miracle(self,payload):
+    def _action_send_product_to_miracle(self, payload, trigger_label=None, reference=None, res_model=None, res_id=None):
         self.ensure_one()
-        request = self.miracle_api_call(self.miracle_post_product_url,"post",payload)
+        request = self.miracle_api_call(self.miracle_post_product_url,"post",payload, trigger_label=trigger_label, reference=reference, res_model=res_model, res_id=res_id)
         return request
 
-    def _action_get_product_from_miracle(self,payload):
+    def _action_get_product_from_miracle(self, payload, trigger_label=None, reference=None, res_model=None, res_id=None):
         self.ensure_one()
-        response = self.miracle_api_call(self.miracle_get_product_url,"get",payload)
+        response = self.miracle_api_call(self.miracle_get_product_url,"get",payload, trigger_label=trigger_label, reference=reference, res_model=res_model, res_id=res_id)
         return response
         

@@ -10,12 +10,14 @@ orders = env['sale.order'].search([
     ('state', 'in', ['sale']),
     ('picking_ids.state', '=', 'done'),
     ('picking_ids.picking_type_id.code', '=', 'outgoing'),
-    ('picking_ids.is_miracle_voucher', '=', False)
+    ('picking_ids.is_miracle_voucher', '=', False),
+    ('picking_ids.prevent_initial_miracle_upload', '=', False)
 ])
 for sale_order in orders:
-    for picking in sale_order.picking_ids.filtered(lambda p: p.state == 'done' and p.picking_type_id.code == 'outgoing' and not p.is_miracle_voucher):
+    for picking in sale_order.picking_ids.filtered(lambda p: p.state == 'done' and p.picking_type_id.code == 'outgoing' and not p.is_miracle_voucher and not p.prevent_initial_miracle_upload):
         try:
             picking.with_company(picking.company_id).with_context(skip_miracle_sync=False).action_upload_challan_to_miracle()
+            env.cr.commit()
             time.sleep(1.5)
         except Exception as e:
             log("Sync Picking Failed: %s" % e, level='error')

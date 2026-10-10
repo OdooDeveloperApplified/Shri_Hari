@@ -7,10 +7,15 @@ class StockPicking(models.Model):
 
     miracle_voucher_id = fields.Char(string="Miracle Voucher ID",readonly=True, copy=False)
     is_miracle_voucher = fields.Boolean(string="Is Miracle Voucher", readonly=True, copy=False)
+    prevent_initial_miracle_upload = fields.Boolean(string="Prevent Initial Miracle Upload", default=False, copy=False)
 
     def action_upload_challan_to_miracle(self):
         if self.env.context.get('skip_miracle_sync'):
             return
+        
+        if self.prevent_initial_miracle_upload:
+            return
+
         self.ensure_one()
         company = self.env.company
 
@@ -44,18 +49,18 @@ class StockPicking(models.Model):
 
             if self.picking_type_id.code == "incoming":
                 po_line = move.purchase_line_id
-                rate = po_line.price_unit if po_line else 0
+                rate = round(po_line.price_unit, 2) if po_line else 0
                 order = po_line.order_id if po_line else order
 
             elif self.picking_type_id.code == "outgoing":
                 so_line = move.sale_line_id
-                rate = so_line.price_unit if so_line else 0
+                rate = round(so_line.price_unit, 2) if so_line else 0
                 order = so_line.order_id if so_line else order
 
             else:
                 rate = 0
 
-            amount = qty * rate
+            amount = round(qty * rate, 2)
 
             # Shared with app_miracle_product/shrihari_sales - single
             # implementation of the box/piece UOM ratio, not a fourth copy
@@ -65,7 +70,8 @@ class StockPicking(models.Model):
             # UCRATE = per-piece rate for this challan line (sales challan
             # rate), derived from the box-level `rate` the same way
             # Miracle Single PC Rate is derived from list_price elsewhere.
-            ucrate = (rate / ratio) if ratio else rate
+            # Miracle requires exactly 4 decimal places.
+            ucrate = round((rate / ratio) if ratio else rate, 4)
 
             # _logger.info("Product: %s | Qty: %s | Rate: %s", move.product_id.display_name, qty, rate)
 
@@ -86,18 +92,19 @@ class StockPicking(models.Model):
                         "locnm": "",
                         "qty1": ml.quantity * ratio,
                         "qty2": ml.quantity,
-                        "qty3": 0.0,
-                        "qty4": 0.0,
-                        "qty5": 0.0,
+                        # "qty3": 0.0,
+                        # "qty4": 0.0,
+                        # "qty5": 0.0,
                         "txpaidrt": 0,
                         "rate": rate,
-                        "amt": ml.quantity * rate,
+                        "amt": round(ml.quantity * rate, 2),
                     }
                     if self.picking_type_id.code == "outgoing":
                         item_dict["ufddet"] = {
-                            "UBOX": 0,
+                            "UBOX": round(rate, 4),
+                            # "UMRP": round(move.product_id.miracle_mrp, 4) if move.product_id.miracle_mrp else 0.0,
                             "UDESC": "",
-                            # "UCRATE": ucrate
+                            "UCRATE": ucrate
                         }
                     items.append(item_dict)
             else:
@@ -108,18 +115,19 @@ class StockPicking(models.Model):
                     "locnm": "",
                     "qty1": qty * ratio,
                     "qty2": qty,
-                    "qty3": 0.0,
-                    "qty4": 0.0,
-                    "qty5": 0.0,
+                    # "qty3": 0.0,
+                    # "qty4": 0.0,
+                    # "qty5": 0.0,
                     "txpaidrt": 0,
                     "rate": rate,
                     "amt": amount,
                 }
                 if self.picking_type_id.code == "outgoing":
                     item_dict["ufddet"] = {
-                        "UBOX": 0,
+                        "UBOX": round(rate, 4),
+                        # "UMRP": round(move.product_id.miracle_mrp, 4) if move.product_id.miracle_mrp else 0.0,
                         "UDESC": "",
-                        # "UCRATE": ucrate
+                        "UCRATE": ucrate
                     }
                 items.append(item_dict)
 
@@ -129,14 +137,40 @@ class StockPicking(models.Model):
                 "danger"
             )
 
+        # Odoo doesn't add Service products (like Freight) to Delivery Orders/Challans.
+        # We manually fetch them from the original Order and inject them into the payload here.
+        for line in order.order_line:
+            if line.product_id and line.product_id.type == 'service' and line.product_id.miracle_product_id:
+                item_dict = {
+                    "prd": line.product_id.miracle_product_id,
+                    "seqno": len(items) + 1,
+                    "batchnm": "",
+                    "locnm": "",
+                    "qty1": 0.0,
+                    "qty2": 0.0,
+                    # "qty3": 0.0,
+                    # "qty4": 0.0,
+                    # "qty5": 0.0,
+                    "txpaidrt": 0,
+                    "rate": line.price_unit,
+                    "amt": line.price_subtotal,
+                }
+                if self.picking_type_id.code == "outgoing":
+                    item_dict["ufddet"] = {
+                        "UBOX": 0.0,
+                        "UDESC": "",
+                        "UCRATE": 0.0
+                    }
+                items.append(item_dict)
+
         payload = {
             "action": action_type,
             "acc": self.partner_id.miracle_account_id,
             "billamt": order.amount_total,
             "flgcd": "D",
             "narr": "",
-            "invtyp": "GST" if self.partner_id.state_id == self.company_id.state_id else "IGST",
-            # "invtyp": "1. GST" if self.partner_id.state_id == self.company_id.state_id else "2. IGST",
+            # "invtyp": "GST" if self.partner_id.state_id == self.company_id.state_id else "IGST",
+            "invtyp": "1. GST" if self.partner_id.state_id == self.company_id.state_id else "2. IGST",
             "taxtyp": "T",
             "docdt": "",
             "docno": "",
@@ -170,7 +204,7 @@ class StockPicking(models.Model):
             payload['uniqueId'] = self.miracle_voucher_id
 
         _logger.info("MIRACLE PAYLOAD = %s", payload)
-        response = company._action_send_voucher_to_miracle(payload)
+        response = company._action_send_voucher_to_miracle(payload, trigger_label=f"Upload delivery challan {self.name} to Miracle — order {order.name}", reference=self.name, res_model='stock.picking', res_id=self.id)
 
         if response.get("IsError"):
             return company.miracle_notification(

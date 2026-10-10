@@ -7,12 +7,12 @@
         <field name="inherit_id" ref="account.view_account_payment_form"/>
         <field name="arch" type="xml">
 
-            <xpath expr="//header" position="inside">
+            <!-- <xpath expr="//header" position="inside">
                 <button name="action_send_payment_to_miralce"
                         string="Upload to Miracle"
                         type="object"
                         class="btn-primary"/>
-            </xpath>
+            </xpath> -->
             <xpath expr="//notebook" position="inside">
                 <page string="Miracle Voucher">
                     <group>

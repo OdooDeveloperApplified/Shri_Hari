@@ -167,8 +167,8 @@ for move in move_ids:
         <field name="code"><![CDATA[
 for record in records:
     try:
-        # Strictly upload ONLY if it's an outgoing delivery linked to a Sale Order
-        if record.picking_type_id.code == 'outgoing' and record.sale_id:
+        # Strictly upload ONLY if it's an outgoing delivery linked to a Sale Order AND is DONE
+        if record.picking_type_id.code == 'outgoing' and record.sale_id and record.state == 'done':
             record.action_upload_challan_to_miracle()
     except Exception as e:
         log(
@@ -185,7 +185,7 @@ for record in records:
         <field name="model_id" ref="stock.model_stock_picking"/>
         <field name="trigger">on_create_or_write</field>
         <field name="action_server_ids" eval="[(4, ref('server_action_miracle_stock_picking'))]"/>
-        <field name="active">True</field>
+        <field name="active">False</field>
     </record>
 
 </odoo>

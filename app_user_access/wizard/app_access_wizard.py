@@ -28,7 +28,6 @@ class AppAccessWizard(models.TransientModel):
                 Command.create({
                     'partner_id': partner.id,
                     'mobile': partner.mobile,
-                    # 'password': 'Welcome123!', # <--- Add this line!
                 })
                 for partner in wizard.partner_ids
             ]

@@ -13,6 +13,7 @@
         'views/res_config_settings_views.xml',
         'views/product_category_views.xml',
         'views/product_pricelist_item_views.xml',
+        'views/res_partner_views.xml',
 
     ],
     'license': 'LGPL-3',

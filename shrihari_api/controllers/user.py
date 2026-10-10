@@ -107,11 +107,15 @@ class UserController(http.Controller):
                 access_token_dict = {
                     'user_id': user.id,
                     'api_key': token,
-                    'expiry_date': datetime.now() + timedelta(days=7)
+                    'expiry_date': datetime.now() + timedelta(days=30)
                 }
                 request.env['partner.api.key'].sudo().create(access_token_dict)
 
-            # Stock sync has been moved to products_by_category for live updates
+            # Synchronous stock sync on login so the app shows live stock immediately
+            try:
+                user.company_id._action_get_miracle_stock_ledger()
+            except Exception as e:
+                _logger.error("Failed to sync stock during login: %s", str(e))
 
             partner = user.partner_id.with_company(user.company_id)
 
@@ -180,7 +184,7 @@ class UserController(http.Controller):
             )
 
         # Expiry update to next 7 days
-        new_expiry = datetime.now() + timedelta(days=7)
+        new_expiry = datetime.now() + timedelta(days=30)
 
         api_key.sudo().write({
             'expiry_date': new_expiry

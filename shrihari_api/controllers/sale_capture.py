@@ -4,8 +4,35 @@ from .token import validate_api_request, to_local_str, fmt_num, resolve_miracle_
 from datetime import datetime
 import json
 import logging
+import psycopg2
+import threading
+import odoo
 
 _logger = logging.getLogger(__name__)
+
+def trigger_background_stock_sync(db_name, company_id):
+    """Run a full stock sync in the background so it doesn't slow down the user's checkout response.
+    Includes database locking and debouncing to prevent server overload if multiple users checkout at once.
+    """
+    try:
+        registry = odoo.registry(db_name)
+        with registry.cursor() as cr:
+            # 1. Acquire a non-blocking PostgreSQL advisory lock
+            # If another thread/process is already syncing, this returns False instantly
+            cr.execute("SELECT pg_try_advisory_xact_lock(88881234)")
+            acquired = cr.fetchone()[0]
+            if not acquired:
+                _logger.info("Background sync already running. Skipping duplicate thread.")
+                return
+
+            env = odoo.api.Environment(cr, odoo.SUPERUSER_ID, {})
+            
+            company = env['res.company'].browse(company_id)
+            if company.exists():
+                company._action_get_miracle_stock_ledger()
+                env.cr.commit()
+    except Exception as e:
+        _logger.error("Background stock sync failed: %s", str(e))
 
 
 def _get_applied_slab(order, line):
@@ -87,9 +114,14 @@ class SaleCaptureCreateAPI(http.Controller):
                 if miracle_ids:
                     user.company_id._action_get_miracle_stock_ledger(miracle_product_ids=miracle_ids)
                     
+            except (psycopg2.errors.DeadlockDetected, psycopg2.errors.SerializationFailure, psycopg2.errors.LockNotAvailable):
+                # Let Odoo's core framework handle the deadlock by silently retrying the whole request
+                raise
             except Exception as e:
                 _logger.error("Concurrency or Miracle Sync Exception during checkout: %s", str(e), exc_info=True)
                 request.env.cr.rollback()
+                request.env.reset()
+                request.env.registry.reset_changes()
                 
                 # Do a read-only stock check to see if we should trigger the Stock Alert popup
                 stock_availability = []
@@ -124,6 +156,9 @@ class SaleCaptureCreateAPI(http.Controller):
                     idx += 1
                 
                 if has_insufficient_stock:
+                    # Fire background sync so next catalog load is correct
+                    threading.Thread(target=trigger_background_stock_sync, args=(request.env.cr.dbname, user.company_id.id)).start()
+
                     # Trigger the Mobile App's Stock Alert Popup!
                     return Response(json.dumps({
                         "success": False,
@@ -245,16 +280,29 @@ class SaleCaptureCreateAPI(http.Controller):
                 ).button_validate()
                 
             # 2. Automate Invoice Creation and Posting
-            invoice = sale_order.with_context(skip_miracle_sync=True)._create_invoices()
-            if invoice:
-                invoice.with_context(skip_miracle_sync=True).action_post()
+            # invoice = sale_order.with_context(skip_miracle_sync=True)._create_invoices()
+            # if invoice:
+            #     invoice.with_context(skip_miracle_sync=True).action_post()
 
             # 3. Synchronously upload delivery to Miracle so the stock is immediately deducted
             # before the PostgreSQL lock is released for the next user!
             for picking in sale_order.picking_ids.filtered(lambda p: p.state == 'done' and p.picking_type_id.code == 'outgoing' and not p.is_miracle_voucher):
-                picking.with_company(picking.company_id).with_context(skip_miracle_sync=False).action_upload_challan_to_miracle()
+                res = picking.with_company(picking.company_id).with_context(skip_miracle_sync=False).action_upload_challan_to_miracle()
+                
+                # Check if Miracle rejected the upload
+                if not picking.miracle_voucher_id:
+                    error_msg = res.get('params', {}).get('message') if isinstance(res, dict) else "Unknown Miracle Sync Error"
+                    raise Exception(f"Miracle rejected the order: {error_msg}")
 
+        except (psycopg2.errors.DeadlockDetected, psycopg2.errors.SerializationFailure, psycopg2.errors.LockNotAvailable):
+            # Let Odoo's core framework handle the deadlock by silently retrying the whole request
+            raise
         except Exception as e:
+            # CRITICAL: We must manually rollback the database transaction!
+            # Otherwise Odoo will save the Sale Order even though we tell the app it failed!
+            request.env.cr.rollback()
+            request.env.reset()
+            request.env.registry.reset_changes()
             return Response(json.dumps({
                 "success": False,
                 "message": str(e)
@@ -268,6 +316,8 @@ class SaleCaptureCreateAPI(http.Controller):
             "company": sale_order.company_id.name,
             "amount_total": fmt_num(sale_order.amount_total)
         })
+        # Fire background sync so the catalog is updated for the next visit
+        threading.Thread(target=trigger_background_stock_sync, args=(request.env.cr.dbname, user.company_id.id)).start()
 
         return Response(json.dumps({
             "success": True,
@@ -309,7 +359,7 @@ class SaleCaptureListAPI(http.Controller):
                 lines.append({
                     "product_id": line.product_id.id,
                     "product_name": line.product_id.name,
-                    "qty": fmt_num(line.product_uom_qty),
+                    "qty": 0.0 if line.product_id.type == 'service' else fmt_num(line.product_uom_qty),
                     "price": fmt_num(line.price_unit),
                     "subtotal": fmt_num(line.price_subtotal),
                     "image_url": f"{base_url}/web/image/product.template/{line.product_id.id}/image_1920??t={int(datetime.now().timestamp())}"
@@ -388,6 +438,7 @@ class SaleCaptureSaleOrderAPI(http.Controller):
             "sale_capture_id": so.id,
             "reference": so.name,
             "customer": so.partner_id.name,
+            "state": so.state,
             "company_wise_sale_orders": company_wise_orders
         }), content_type='application/json')
 
@@ -427,7 +478,7 @@ class SaleCaptureSaleOrderLineAPI(http.Controller):
                 "product_id": line.product_id.id,
                 "product_name": line.product_id.name,
                 "category": line.product_id.categ_id.name if line.product_id.categ_id else '',
-                "quantity": fmt_num(line.product_uom_qty),
+                "quantity": 0.0 if line.product_id.type == 'service' else fmt_num(line.product_uom_qty),
                 "price_unit": fmt_num(line.price_unit),
                 "subtotal": fmt_num(line.price_subtotal),
                 "slab_applied": _get_applied_slab(sale_order, line),
@@ -440,6 +491,7 @@ class SaleCaptureSaleOrderLineAPI(http.Controller):
             "sale_capture_id": sale_order.id, # Fallback mapping
             "reference": sale_order.name,
             "customer": sale_order.partner_id.name,
+            "state": sale_order.state,
             "sale_order": {
                 "sale_order_id": sale_order.id,
                 "sale_order_name": sale_order.name,

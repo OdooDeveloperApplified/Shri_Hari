@@ -7,8 +7,8 @@
         <field name="inherit_id" ref="account.view_move_form"/>
         <field name="arch" type="xml">
 
-            <xpath expr="//header" position="inside">
-                <!-- <button name="action_upload_invoice_to_miracle"
+            <!-- <xpath expr="//header" position="inside">
+                <button name="action_upload_invoice_to_miracle"
                         string="Upload to Miracle"
                         type="object"
                         class="btn-primary"
@@ -18,8 +18,8 @@
                         string="Sync from Miracle"
                         type="object"
                         class="btn-secondary"
-                        /> -->
-            </xpath>
+                        />
+            </xpath> -->
 
             <xpath expr="//field[@name='invoice_date']" position="after">
                 <field name="miracle_reason_id" modifiers="{'invisible': ['|',['move_type', 'not in', ['out_refund','in_refund']],['invoice_line_ids.product_id', '!=', false]],'required': [['move_type', 'in', ['out_refund','in_refund']]]}"/>

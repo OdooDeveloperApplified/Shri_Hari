@@ -50,20 +50,21 @@ class ProductAPI(http.Controller):
         
         # Fetch products for the given category (including child categories) or all products if no category_id
         products = request.env['product.template'].sudo().search(domain)
-
+        
         # --- LIVE STOCK SYNC FOR MOBILE REFRESH ---
-        try:
-            if category_id:
-                # Targeted sync: lightning fast for single category refresh
-                miracle_ids = [p.miracle_product_id for p in products if p.miracle_product_id]
-                if miracle_ids:
-                    user.company_id._action_get_miracle_stock_ledger(miracle_product_ids=miracle_ids)
-            else:
-                # Full sync: if they pull to refresh the entire catalog
-                user.company_id._action_get_miracle_stock_ledger()
-        except Exception as e:
-            _logger.warning("Miracle stock ledger refresh failed in products_by_category: %s", e)
+        # try:
+        #     if category_id:
+        #         # Targeted sync: lightning fast for single category refresh
+        #         miracle_ids = [p.miracle_product_id for p in products if p.miracle_product_id]
+        #         if miracle_ids:
+        #             user.company_id._action_get_miracle_stock_ledger(miracle_product_ids=miracle_ids)
+        #     else:
+        #         # Full sync: if they pull to refresh the entire catalog
+        #         user.company_id._action_get_miracle_stock_ledger()
+        # except Exception as e:
+        #     _logger.warning("Miracle stock ledger refresh failed in products_by_category: %s", e)
         # ------------------------------------------
+
 
 
         # Use the single default company for the user
@@ -124,15 +125,39 @@ class ProductAPI(http.Controller):
                         # undiscounted MRP for percentage rules) - what the
                         # message should actually advertise to the customer.
                         piece_price = slab_price / pack_size if pack_size else slab_price
+                        # Calculate the percentage for the message (even for fixed type)
+                        if item.compute_price == 'percentage':
+                            discount_percent = item.percent_price
+                        else:
+                            discount_percent = ((product.miracle_mrp - piece_price) / product.miracle_mrp) * 100 if product.miracle_mrp else 0.0
+                            
+                        # Build the message string
+                        msg = f"Buy {int(item.min_quantity)}+ at {currency_symbol}{fmt_num(piece_price)}/piece"
+                        if discount_percent > 0:
+                            dp_str = f"{int(discount_percent)}" if round(discount_percent, 2).is_integer() else f"{discount_percent:.2f}"
+                            msg += f" ({dp_str}% Less)"
+                            
                         pricing_slabs.append({
                             "min_qty": fmt_num(item.min_quantity),
                             "price": fmt_num(slab_price),
                             "discount_type": item.compute_price,  # 'fixed' or 'percentage'
                             "single_piece_price": fmt_num(single_piece_price),
-                            "discount_percent": fmt_num(item.percent_price) if item.compute_price == 'percentage' else None,
-                            "discount_message": f"Buy {int(item.min_quantity)}+ at {currency_symbol}{fmt_num(piece_price)}/piece"
+                            "discount_percent": f"{int(discount_percent)}" if round(discount_percent, 2).is_integer() else f"{discount_percent:.2f}",
+                            "discount_message": msg
                         })
                     # _logger.info("this are pricing slabs-------> %s",pricing_slabs)
+
+            single_piece_discount_percent = 0.0
+            if product.miracle_mrp and product.miracle_single_pc_rate and product.miracle_mrp > product.miracle_single_pc_rate:
+                single_piece_discount_percent = ((product.miracle_mrp - product.miracle_single_pc_rate) / product.miracle_mrp) * 100
+
+            currency_symbol = company.currency_id.symbol or ''
+            single_piece_msg = f"{currency_symbol}{fmt_num(product.miracle_single_pc_rate)}"
+            single_piece_dp_str = "0"
+            
+            if single_piece_discount_percent > 0:
+                single_piece_dp_str = f"{int(single_piece_discount_percent)}" if round(single_piece_discount_percent, 2).is_integer() else f"{single_piece_discount_percent:.2f}"
+                single_piece_msg += f" ({single_piece_dp_str}% Less)"
 
             product_list.append({
                 # 'id': product.id,
@@ -141,6 +166,8 @@ class ProductAPI(http.Controller):
                 'default_code': product.default_code or '',
                 'list_price': fmt_num(product.list_price),
                 'miracle_cart_rate': fmt_num(product.miracle_single_pc_rate),
+                'miracle_cart_rate_discount_percent': single_piece_dp_str if single_piece_discount_percent > 0 else "0",
+                'miracle_cart_rate_message': single_piece_msg,
                 'miracle_mrp': fmt_num(product.miracle_mrp),
                 'taxes': [
                         {

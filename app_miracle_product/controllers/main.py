@@ -53,16 +53,41 @@ class MiracleProductWebhookController(http.Controller):
                     headers=[('Content-Type', 'application/json')]
                 )
 
+            event_type = payload.get('EventType')
+
             # Check if Product exists
             product = request.env['product.template'].sudo().with_company(company).search([
                 ('miracle_product_id', '=', unique_id)
             ], limit=1)
 
+            if event_type == 'PD':
+                if product:
+                    product.write({'active': False})
+                    _logger.info("Archived Product %s (%s) due to Miracle webhook PD event", product.name, unique_id)
+                else:
+                    _logger.info("Ignored PD webhook: Product %s not found or already archived in Odoo", unique_id)
+                
+                res_obj = request.make_response(
+                    json.dumps({
+                        "success": True,
+                        "message": "Product Archived"
+                    }),
+                    headers=[("Content-Type","application/json")]
+                )
+                if product:
+                    res_obj.res_model = 'product.template'
+                    res_obj.res_id = product.id
+                return res_obj
+
             api_response = None
 
             if not product:
                 # Ask Miracle for details FIRST before creating shell
-                api_response = company._action_get_product_from_miracle({"id": unique_id})
+                api_response = company._action_get_product_from_miracle(
+                    {"id": unique_id},
+                    trigger_label=f"Webhook {event_type} → fetching product detail", 
+                    reference=unique_id
+                )
                 
                 if not api_response or api_response.get("IsError") or not api_response.get("DataModel"):
                     _logger.info("Ignored product webhook for %s because no details were found in Miracle.", unique_id)
@@ -97,13 +122,17 @@ class MiracleProductWebhookController(http.Controller):
 
             # _logger.info("=" * 80)
 
-            return request.make_response(
+            res_obj = request.make_response(
                 json.dumps({
                     "success": True,
                     "message": "Product Webhook Processed"
                 }),
                 headers=[("Content-Type","application/json")]
             )
+            if product:
+                res_obj.res_model = 'product.template'
+                res_obj.res_id = product.id
+            return res_obj
 
         except Exception as e:
             _logger.exception('Miracle product webhook error')

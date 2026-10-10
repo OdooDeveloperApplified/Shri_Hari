@@ -33,3 +33,15 @@ class MiracleApiLog(models.Model):
         ("success", "Success"),
         ("failed", "Failed"),
     ])
+
+    direction = fields.Selection([
+        ('outbound', 'Odoo → Miracle'),
+        ('inbound', 'Miracle → Odoo'),
+    ], required=True, default='outbound')
+
+    trigger_label = fields.Char("Triggered By")
+    
+    reference = fields.Char("Reference", index=True)
+    
+    res_model = fields.Char("Related Document Model")
+    res_id = fields.Integer("Related Document ID")

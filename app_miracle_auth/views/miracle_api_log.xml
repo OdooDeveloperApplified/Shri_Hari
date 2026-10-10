@@ -10,6 +10,9 @@
         <field name="arch" type="xml">
             <list string="API Logs">
                 <field name="create_date"/>
+                <field name="reference"/>
+                <field name="direction"/>
+                <field name="trigger_label" optional="hide"/>
                 <field name="company_id"/>
                 <field name="session_id"/>
                 <field name="name"/>
@@ -32,6 +35,10 @@
 
                     <!-- Main Information -->
                     <group>
+                        <field name="create_date"/>
+                        <field name="reference"/>
+                        <field name="direction"/>
+                        <field name="trigger_label"/>
                         <field name="company_id"/>
                         <field name="session_id"/>
                         <field name="name"/>
@@ -69,8 +76,18 @@
 
                 <!-- Quick Search Fields -->
                 <field name="name"/>
+                <field name="reference"/>
                 <field name="company_id"/>
                 <field name="session_id"/>
+
+                <!-- Filters -->
+                <filter string="Outbound (Odoo → Miracle)"
+                        name="filter_outbound"
+                        domain="[('direction','=','outbound')]"/>
+                <filter string="Inbound (Miracle → Odoo)"
+                        name="filter_inbound"
+                        domain="[('direction','=','inbound')]"/>
+                <separator/>
 
                 <!-- Filters -->
                 <filter string="Success"
@@ -87,6 +104,9 @@
 
                 <!-- Group By -->
                 <group expand="0" string="Group By">
+                    <filter string="Direction"
+                            name="group_by_direction"
+                            context="{'group_by':'direction'}"/>
                     <filter string="Company"
                             name="group_by_company"
                             context="{'group_by':'company_id'}"/>

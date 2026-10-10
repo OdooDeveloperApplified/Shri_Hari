@@ -13,6 +13,8 @@ class PurchaseOrder(models.Model):
     is_miracle_voucher = fields.Boolean(string="Is Miracle Voucher", readonly=True,copy=False)
 
     def action_upload_purchase_to_miracle(self):
+        if self.env.context.get('skip_miracle_sync'):
+            return
         self.ensure_one()
         company = self.env.company
 
@@ -87,7 +89,7 @@ class PurchaseOrder(models.Model):
         if action_type == "E":
             payload['uniqueId'] = current_id
 
-        request = company._action_send_voucher_to_miracle(payload)
+        request = company._action_send_voucher_to_miracle(payload, trigger_label=f"Upload purchase order {self.name} to Miracle", reference=self.name, res_model='purchase.order', res_id=self.id)
 
         if request.get("IsError"):
             return company.miracle_notification(
@@ -129,7 +131,7 @@ class PurchaseOrder(models.Model):
             "id": miracle_id
         }
 
-        response = company._action_get_voucher_from_miracle(payload)
+        response = company._action_get_voucher_from_miracle(payload, trigger_label=f"Sync purchase order {self.name} from Miracle", reference=self.name, res_model='purchase.order', res_id=self.id)
 
         if response.get("IsError"):
             return company.miracle_notification(
@@ -196,19 +198,31 @@ class PurchaseOrder(models.Model):
                     "danger"
                 )
 
-            qty1 = item.get('qty1') or 0.0
+            # --- OLD CALCULATION LOGIC ---
+            # qty1 = float(item.get('qty1') or 0.0)
             # Shared with app_miracle_product/shrihari_sales - single
             # implementation of the box/piece UOM ratio, not a fourth copy
             # of the same bigger/smaller factor logic.
-            pack_size = self.env['product.template']._get_miracle_pack_size(product.uom_id)
-            qty1 = qty1 / pack_size
+            # pack_size = self.env['product.template']._get_miracle_pack_size(product.uom_id)
+            # qty1 = qty1 / pack_size
+
+            # --- NEW DIRECT FETCH LOGIC ---
+            qty1 = float(item.get('qty2') or 0.0)
+
+            rate = float(item.get('rate') or 0.0)
+            amt = float(item.get('amt') or 0.0)
+
+            # Fix for flat charges (like Freight) where Miracle sends Qty 0 but Amount > 0
+            if qty1 == 0 and amt > 0:
+                qty1 = 1.0
+                rate = amt
 
             existing_line = existing_lines.get(miracle_prd)
 
             if existing_line:
                 existing_line.write({
                     'product_qty': qty1,
-                    'price_unit': item.get('rate'),
+                    'price_unit': rate,
                 })
             else:
                 self.env['purchase.order.line'].create({
@@ -216,7 +230,7 @@ class PurchaseOrder(models.Model):
                     'product_id': product.id,
                     'name': product.name,
                     'product_qty': qty1,
-                    'price_unit': item.get('rate'),
+                    'price_unit': rate,
                 })
 
         for line in self.order_line:

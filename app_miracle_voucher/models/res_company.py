@@ -8,14 +8,14 @@ class ResCompany(models.Model):
     miracle_post_voucher_url = fields.Char("Voucher Create URL", default="TPA/M2/V1/Voucher", readonly=True)
     miracle_get_voucher_url = fields.Char("Get Voucher URL", default="TPA/M2/V1/GetVoucher", readonly=True)
 
-    def _action_send_voucher_to_miracle(self,payload):
+    def _action_send_voucher_to_miracle(self, payload, trigger_label=None, reference=None, res_model=None, res_id=None):
         self.ensure_one()
-        request = self.miracle_api_call(self.miracle_post_voucher_url,"post",payload)
+        request = self.miracle_api_call(self.miracle_post_voucher_url,"post",payload, trigger_label=trigger_label, reference=reference, res_model=res_model, res_id=res_id)
         return request
 
-    def _action_get_voucher_from_miracle(self, payload):
+    def _action_get_voucher_from_miracle(self, payload, trigger_label=None, reference=None, res_model=None, res_id=None):
         self.ensure_one()
-        response = self.miracle_api_call(self.miracle_get_voucher_url,"get",payload)
+        response = self.miracle_api_call(self.miracle_get_voucher_url,"get",payload, trigger_label=trigger_label, reference=reference, res_model=res_model, res_id=res_id)
         return response
     
     # def _action_get_miracle_voucher(self):

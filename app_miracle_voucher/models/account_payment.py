@@ -62,7 +62,7 @@ class AccountPayment(models.Model):
         if action_type == "E":
             payload["uniqueId"] = self.miracle_voucher_id
 
-        request = company._action_send_voucher_to_miracle(payload)
+        request = company._action_send_voucher_to_miracle(payload, trigger_label=f"Upload payment {self.name} to Miracle", reference=self.name, res_model='account.payment', res_id=self.id)
 
         if request.get("IsError"):
             return company.miracle_notification(

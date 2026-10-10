@@ -18,6 +18,9 @@ class SaleOrder(models.Model):
         sides stay in sync automatically.
         """
         for order in self:
+            if not order.partner_id.apply_freight_charge:
+                continue
+
             freight_product = order.company_id.mobile_freight_product_id
             if not freight_product:
                 continue

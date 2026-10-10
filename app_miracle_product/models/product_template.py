@@ -233,16 +233,18 @@ class ProductTemplate(models.Model):
             record.miracle_tax_string = f"GST {int(rate)}%"
 
     def _sync_miracle_stock(self, item):
-        closing_qty = item.get('clqty1') or 0.0
+        # --- OLD CALCULATION LOGIC ---
+        # closing_qty = float(item.get('clqty1') or 0.0)
+        # pack_size = self.env['product.template']._get_miracle_pack_size(self.uom_id)
+        # if pack_size:
+        #     closing_qty = closing_qty / pack_size
+        
+        # --- NEW DIRECT FETCH LOGIC ---
+        closing_qty = float(item.get('clqty2') or 0.0)
         
         # We only want to update stock for storable products
         if not self.is_storable:
             return
-
-        # Convert Miracle's smallest piece quantity into Odoo's UOM quantity
-        pack_size = self.env['product.template']._get_miracle_pack_size(self.uom_id)
-        if pack_size:
-            closing_qty = closing_qty / pack_size
 
         product = self.product_variant_id
         if not product:
@@ -387,6 +389,11 @@ class ProductTemplate(models.Model):
             # ---------------------------------------------------
 
             if existing_product:
+                # Odoo 18 prevents changing is_storable on products with existing stock moves.
+                # Since the product already exists, we shouldn't attempt to overwrite its tracking status.
+                if 'is_storable' in vals:
+                    vals.pop('is_storable')
+                
                 existing_product.write(vals)
                 product = existing_product
                 total_updated += 1
@@ -450,12 +457,12 @@ class ProductTemplate(models.Model):
             try:
                 target_payload = base_edit_payload.copy()
                 target_payload["action"] = "E"
-                response = company._action_send_product_to_miracle(target_payload)
+                response = company._action_send_product_to_miracle(target_payload, trigger_label=f"Shared Product Sync {self.name} to {company.name}", reference=self.name, res_model='product.template', res_id=self.id)
                 
                 if response.get("IsError") and ("No records found" in response.get("Message", "") or response.get("ErrorCode") == "TPA003"):
                     target_payload["action"] = "A"
                     target_payload.update(add_fields)
-                    response = company._action_send_product_to_miracle(target_payload)
+                    response = company._action_send_product_to_miracle(target_payload, trigger_label=f"Shared Product Sync {self.name} to {company.name}", reference=self.name, res_model='product.template', res_id=self.id)
                 
                 if not response.get("IsError"):
                     self.with_company(company).write({
@@ -545,7 +552,7 @@ class ProductTemplate(models.Model):
 
             if not from_webhook:
                 try:
-                    response = source_company._action_send_product_to_miracle(payload)
+                    response = source_company._action_send_product_to_miracle(payload, trigger_label=f"Upload product {product.name} to Miracle", reference=product.name, res_model='product.template', res_id=product.id)
                     _logger.info("Source Product Sync | %s | %s",source_company.name,response)
 
                     if response.get("IsError"):
@@ -702,7 +709,7 @@ class ProductTemplate(models.Model):
             payload = {
                 "id": self.miracle_product_id
             }
-            response = company._action_get_product_from_miracle(payload) 
+            response = company._action_get_product_from_miracle(payload, trigger_label=f"Sync product {self.name} from Miracle", reference=self.name, res_model='product.template', res_id=self.id)
 
         if not response:
             return company.miracle_notification(
@@ -742,7 +749,7 @@ class ProductTemplate(models.Model):
                 "id": product.miracle_product_id
             }
 
-            response = company._action_get_product_from_miracle(payload) 
+            response = company._action_get_product_from_miracle(payload, trigger_label=f"Bulk Sync product {product.name} from Miracle", reference=product.name, res_model='product.template', res_id=product.id)
 
             if not response or response.get("IsError"):
                 _logger.warning("Miracle sync failed for product %s", product.name)

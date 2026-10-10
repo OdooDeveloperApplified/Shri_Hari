@@ -75,25 +75,57 @@ class MiracleWebhookController(http.Controller):
                                 invoice.with_context(force_delete=True).unlink()
 
                         for pick in sale_order.picking_ids:
-                            request.env.cr.execute("DELETE FROM stock_move_line WHERE picking_id = %s", (pick.id,))
-                            request.env.cr.execute("DELETE FROM stock_move WHERE picking_id = %s", (pick.id,))
-                            request.env.cr.execute("DELETE FROM stock_picking WHERE id = %s", (pick.id,))
+                            if pick.state == 'done':
+                                ReturnWiz = request.env['stock.return.picking'].sudo().with_context(
+                                    active_id=pick.id, 
+                                    active_ids=pick.ids
+                                )
+                                return_moves = []
+                                for m in pick.move_ids:
+                                    if m.state == 'done':
+                                        return_moves.append((0, 0, {
+                                            'product_id': m.product_id.id,
+                                            'quantity': m.product_uom_qty,
+                                            'move_id': m.id,
+                                            'uom_id': m.product_uom.id,
+                                        }))
+                                
+                                wiz = ReturnWiz.create({
+                                    'picking_id': pick.id,
+                                    'product_return_moves': return_moves
+                                })
+                                return_pick = wiz._create_return()
+                                
+                                for move in return_pick.move_ids:
+                                    move.quantity = move.product_uom_qty
+                                    move.picked = True
+                                return_pick.button_validate()
+                                
+                            elif pick.state != 'cancel':
+                                pick.action_cancel()
                             
-                        request.env.cr.execute("DELETE FROM sale_order_line WHERE order_id = %s", (sale_order.id,))
-                        request.env.cr.execute("DELETE FROM sale_order WHERE id = %s", (sale_order.id,))
-                        _logger.info("Successfully deleted Sale Order %s.", sale_order.name)
+                        sale_order.with_context(disable_cancel_warning=True).action_cancel()
+                        _logger.info("Successfully cancelled Sale Order %s natively.", sale_order.name)
+                        return request.make_response(json.dumps({"success": True, "message": "Transaction Deleted"}), headers=[('Content-Type','application/json')])
                     except Exception as e:
                         request.env.cr.rollback()
                         _logger.error("Failed to forcefully delete Sale Order: %s", str(e))
+                        return request.make_response(json.dumps({"success": False, "message": f"Exception: {str(e)}"}), headers=[('Content-Type','application/json')])
                 else:
                     _logger.info("Ignoring TD webhook for %s as it is not a Sale Order / Sales Challan.", unique_id)
                             
-                return request.make_response(json.dumps({"success": True, "message": "Transaction Deleted"}), headers=[('Content-Type','application/json')])
+                res_obj = request.make_response(json.dumps({"success": True, "message": "Transaction Deleted"}), headers=[('Content-Type','application/json')])
+                if sale_order:
+                    res_obj.res_model = 'sale.order'
+                    res_obj.res_id = sale_order.id
+                return res_obj
 
             # Normal Add/Edit flow
-            response = company._action_get_voucher_from_miracle({
-                "id": unique_id
-            })
+            response = company._action_get_voucher_from_miracle(
+                {"id": unique_id},
+                trigger_label=f"Webhook {event_type} → fetching voucher detail", 
+                reference=unique_id
+            )
 
             # _logger.info("Get voucher response")
             _logger.info(json.dumps(response,indent=4))
@@ -110,50 +142,50 @@ class MiracleWebhookController(http.Controller):
             data = response.get("DataModel",{})
             voucher_type = data.get("voutyp")
 
-            if voucher_type == "PP":
-                purchase = request.env['purchase.order'].sudo().with_company(company).search([
-                    ('miracle_purchase_order_id','=',unique_id)
-                ])
+            # if voucher_type == "PP":
+            #     purchase = request.env['purchase.order'].sudo().with_company(company).search([
+            #         ('miracle_purchase_order_id','=',unique_id)
+            #     ])
 
-                if not purchase:
-                    partner = request.env['res.partner'].sudo().with_company(company).search([
-                        ('miracle_account_id','=', data.get('acc'))
-                    ], limit=1)
+            #     if not purchase:
+            #         partner = request.env['res.partner'].sudo().with_company(company).search([
+            #             ('miracle_account_id','=', data.get('acc'))
+            #         ], limit=1)
 
-                    if not partner:
-                        _logger.error("Vendor not found for account %s",data.get('acc'))
-                    else:
-                        purchase = request.env['purchase.order'].sudo().with_company(company).create({
-                            'partner_id': partner.id,
-                            'miracle_purchase_order_id': unique_id
-                        })
+            #         if not partner:
+            #             _logger.error("Vendor not found for account %s",data.get('acc'))
+            #         else:
+            #             purchase = request.env['purchase.order'].sudo().with_company(company).create({
+            #                 'partner_id': partner.id,
+            #                 'miracle_purchase_order_id': unique_id
+            #             })
 
-                if purchase:
-                    # Sync the order lines directly
-                    sync_res = purchase.action_sync_purchase_from_miracle()
-                    if isinstance(sync_res, dict) and (sync_res.get('type') == 'ir.actions.client' or sync_res.get('IsError')):
-                        # Odoo notifications usually have 'params': {'type': 'danger'}
-                        is_danger = sync_res.get('params', {}).get('type') == 'danger' or sync_res.get('IsError')
-                        if is_danger:
-                            _logger.error("Purchase Sync Error: %s", sync_res)
-                            return request.make_response(json.dumps({"success": False, "message": str(sync_res)}), headers=[("Content-Type", "application/json")])
+            #     if purchase:
+            #         # Sync the order lines directly
+            #         sync_res = purchase.action_sync_purchase_from_miracle()
+            #         if isinstance(sync_res, dict) and (sync_res.get('type') == 'ir.actions.client' or sync_res.get('IsError')):
+            #             # Odoo notifications usually have 'params': {'type': 'danger'}
+            #             is_danger = sync_res.get('params', {}).get('type') == 'danger' or sync_res.get('IsError')
+            #             if is_danger:
+            #                 _logger.error("Purchase Sync Error: %s", sync_res)
+            #                 return request.make_response(json.dumps({"success": False, "message": str(sync_res)}), headers=[("Content-Type", "application/json")])
 
-                    # Properly confirm it so Inventory Receipts are generated
-                    if purchase.state in ['draft', 'sent'] and purchase.order_line:
-                        purchase.with_context(skip_miracle_sync=True).button_confirm()
+            #         # Properly confirm it so Inventory Receipts are generated
+            #         if purchase.state in ['draft', 'sent'] and purchase.order_line:
+            #             purchase.with_context(skip_miracle_sync=True).button_confirm()
                         
-                    # Automatically validate the receipt to update inventory instantly
-                    for picking in purchase.picking_ids:
-                        if picking.state not in ['cancel', 'done']:
-                            picking.sudo().with_context(skip_miracle_sync=True).write({
-                                'is_miracle_voucher': True,
-                                'miracle_voucher_id': unique_id
-                            })
-                            for move in picking.move_ids:
-                                move.quantity = move.product_uom_qty
-                            picking.with_context(skip_miracle_sync=True).button_validate()
+            #         # Automatically validate the receipt to update inventory instantly
+            #         for picking in purchase.picking_ids:
+            #             if picking.state not in ['cancel', 'done']:
+            #                 picking.sudo().with_context(skip_miracle_sync=True).write({
+            #                     'is_miracle_voucher': True,
+            #                     'miracle_voucher_id': unique_id
+            #                 })
+            #                 for move in picking.move_ids:
+            #                     move.quantity = move.product_uom_qty
+            #                 picking.with_context(skip_miracle_sync=True).button_validate()
 
-            elif voucher_type == "HS":
+            if voucher_type == "HS":
                 sale = request.env['sale.order'].sudo().with_company(company).search([
                     ('miracle_sale_order_id', '=', unique_id)
                 ])
@@ -189,24 +221,35 @@ class MiracleWebhookController(http.Controller):
                         if picking.state not in ['cancel', 'done']:
                             picking.sudo().with_context(skip_miracle_sync=True).write({
                                 'is_miracle_voucher': True,
-                                'miracle_voucher_id': unique_id
+                                'miracle_voucher_id': unique_id,
+                                'prevent_initial_miracle_upload': True
                             })
                             for move in picking.move_ids:
                                 move.quantity = move.product_uom_qty
-                            picking.with_context(skip_miracle_sync=True).button_validate()
+                            picking.with_context(
+                                skip_miracle_sync=True,
+                                skip_immediate=True,
+                                skip_backorder=True
+                            ).button_validate()
 
             else:
                 _logger.info("Voucher Type %s not handled yet",voucher_type)
                 
             _logger.info("=" * 80)
 
-            return request.make_response(
+            res_obj = request.make_response(
                 json.dumps({
                     "success": True,
                     "message": "Webhook Processed "
                 }),
                 headers=[("Content-Type","application/json")]
             )
+            
+            if voucher_type == "HS" and 'sale' in locals() and sale:
+                res_obj.res_model = 'sale.order'
+                res_obj.res_id = sale.id
+                
+            return res_obj
 
         except Exception as e:
             _logger.exception('Miracle webhook error')

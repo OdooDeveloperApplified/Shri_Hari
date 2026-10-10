@@ -344,7 +344,7 @@ class ResCompany(models.Model):
     # ========================================
     # Centralized API Wrapper
     # ========================================
-    def miracle_api_call(self, endpoint, method="post", payload=None):
+    def miracle_api_call(self, endpoint, method="post", payload=None, trigger_label=None, reference=None, res_model=None, res_id=None):
         self.ensure_one()
 
         session = self._get_valid_session()
@@ -387,6 +387,10 @@ class ResCompany(models.Model):
         except Exception:
             data = response.text
 
+        is_success = response.ok
+        if isinstance(data, dict) and data.get("IsError"):
+            is_success = False
+
         self.env["miracle.api.log"].create({
             "session_id": session.id,
             "company_id": self.id,
@@ -396,7 +400,12 @@ class ResCompany(models.Model):
             "request_payload": str(payload),
             "response_payload": str(data),
             "response_code": response.status_code,
-            "status": "success" if response.ok else "failed",
+            "status": "success" if is_success else "failed",
+            "direction": "outbound",
+            "trigger_label": trigger_label,
+            "reference": reference,
+            "res_model": res_model,
+            "res_id": res_id,
         })
 
         response.raise_for_status()
