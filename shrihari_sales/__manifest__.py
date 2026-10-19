@@ -4,7 +4,7 @@
     'author': 'Applified',
     'website': 'https://www.applified.in',
     'summary': 'Sales for Shri hari',
-    'depends': ['base','sale','stock','sale_stock','contacts','product','app_miracle_product'],
+    'depends': ['base','sale','stock','sale_stock','contacts','product','app_miracle_product', 'mail'],
     'data': [
         # 'security/ir.model.access.csv',
         'data/sequence.xml',

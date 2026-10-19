@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_whatsapp" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.whatsapp</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <app name="whatsapp_otp_settings" string="WhatsApp OTP">
+                    <block title="WhatsApp OTP Configuration">
+                        <setting string="API Domain" company_dependent="1">
+                            <field name="whatsapp_api_domain" placeholder="https://crm.ihakimi.com/api/meta"/>
+                        </setting>
+                        <setting string="API Version" company_dependent="1">
+                            <field name="whatsapp_api_version" placeholder="v22.0"/>
+                        </setting>
+                        <setting string="Phone Number ID" company_dependent="1">
+                            <field name="whatsapp_phone_number_id"/>
+                        </setting>
+                        <setting string="Access Token" company_dependent="1">
+                            <field name="whatsapp_access_token" password="True"/>
+                        </setting>
+                        <setting string="OTP Template Name" company_dependent="1">
+                            <field name="whatsapp_otp_template_name"/>
+                        </setting>
+                        <setting string="OTP Template Language" company_dependent="1">
+                            <field name="whatsapp_otp_template_lang"/>
+                        </setting>
+                    </block>
+                    <block title="Store Review">
+                        <setting string="Test Mobile" company_dependent="1">
+                            <field name="whatsapp_otp_test_mobile" placeholder="e.g. 919999999999"/>
+                        </setting>
+                        <setting string="Static OTP" company_dependent="1">
+                            <field name="whatsapp_otp_test_code" placeholder="e.g. 123456"/>
+                        </setting>
+                    </block>
+                </app>
+            </xpath>
+        </field>
+    </record>
+</odoo>

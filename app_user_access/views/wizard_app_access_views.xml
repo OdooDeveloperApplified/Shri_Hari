@@ -16,14 +16,13 @@
                 <div class="mb-3">
                     Select which contacts should be granted Internal User access for the Mobile App.
                     The mobile number of each selected contact must be valid and unique.
-                    You must also specify a password for each user.
+                    Users will authenticate via OTP on the mobile app.
                 </div>
                 
                 <field name="user_ids" class="o_portal_wizard_user_one2many" widget="portal_wizard_user_one2many">
                     <list string="Contacts" editable="bottom" create="false" delete="false">
                         <field name="partner_id" force_save="1"/>
                         <field name="mobile" readonly="is_internal"/>
-                        <field name="password" password="True" readonly="is_internal"/>
                         
                         <field name="mobile_state" column_invisible="True"/>
                         

@@ -104,6 +104,7 @@ class MiracleProductWebhookController(http.Controller):
                     'name': 'Pending Miracle Sync',
                     'miracle_product_id': unique_id,
                     'is_miracle_product': True,
+                    'is_storable': True,
                     'miracle_source_company_id': company.id,
                     'company_id': False,
                     'responsible_id': False,

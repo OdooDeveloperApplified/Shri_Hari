@@ -19,7 +19,13 @@ class ProductCategoryAPI(http.Controller):
 
             base_url = request.httprequest.host_url.rstrip('/')
 
-            categories = request.env['product.category'].sudo().search([], order='id asc')
+            hidden_categories = request.env['product.category'].sudo().search([('show_in_mobile_app', '=', False)])
+            domain = [('show_in_mobile_app', '=', True)]
+            if hidden_categories:
+                all_hidden_categories = request.env['product.category'].sudo().search([('id', 'child_of', hidden_categories.ids)])
+                domain.append(('id', 'not in', all_hidden_categories.ids))
+
+            categories = request.env['product.category'].sudo().search(domain, order='id asc')
 
             if not categories:
                 return Response(

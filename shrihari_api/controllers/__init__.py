@@ -5,3 +5,4 @@ from . import product
 from . import sale_capture
 from . import country
 from . import miracle_proxy
+from . import otp

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_whatsapp_otp_list" model="ir.ui.view">
+        <field name="name">whatsapp.otp.list</field>
+        <field name="model">whatsapp.otp</field>
+        <field name="arch" type="xml">
+            <list string="WhatsApp OTPs">
+                <field name="mobile"/>
+                <field name="otp"/>
+                <field name="generated_at"/>
+                <field name="expiry_at"/>
+                <field name="attempts"/>
+                <field name="verified_at"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_whatsapp_otp_form" model="ir.ui.view">
+        <field name="name">whatsapp.otp.form</field>
+        <field name="model">whatsapp.otp</field>
+        <field name="arch" type="xml">
+            <form string="WhatsApp OTP">
+                <sheet>
+                    <group>
+                        <field name="mobile"/>
+                        <field name="otp"/>
+                        <field name="generated_at"/>
+                        <field name="expiry_at"/>
+                        <field name="attempts"/>
+                        <field name="verified_at"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_whatsapp_otp" model="ir.actions.act_window">
+        <field name="name">WhatsApp OTPs</field>
+        <field name="res_model">whatsapp.otp</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <menuitem id="menu_whatsapp_otp"
+        name="WhatsApp OTPs"
+        parent="menu_partner_api_root"
+        action="action_whatsapp_otp"
+        sequence="20"/>
+
+</odoo>

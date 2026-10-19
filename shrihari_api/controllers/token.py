@@ -1,6 +1,7 @@
 from odoo.http import  Response, request
 import json
-from datetime import datetime
+import secrets
+from datetime import datetime, timedelta
 import pytz
 import logging
 
@@ -38,6 +39,131 @@ def to_local_str(user, dt_value, fmt='%Y-%m-%d %H:%M:%S'):
         local_tz = pytz.utc
 
     return pytz.utc.localize(dt_value).astimezone(local_tz).strftime(fmt)
+
+def find_user_by_identifier(identifier):
+    """Smart lookup shared by every login path (password or OTP): if the
+    identifier contains at least 10 digits, match on the last 10 digits of
+    either login or mobile (so formatting/country-code differences don't
+    matter); otherwise exact-match login or mobile.
+
+    Returns (user, inactive_user) - user is the first active match (an
+    empty res.users recordset if none); inactive_user is set only when a
+    match existed but was archived, so callers can give a clearer error
+    than a flat "not found".
+    """
+    digits_only = ''.join(filter(str.isdigit, identifier or ''))
+    if len(digits_only) >= 10:
+        phone_pattern = '%' + '%'.join(list(digits_only[-10:])) + '%'
+        search_domain = ['|', ('login', '=', identifier), ('mobile', '=like', phone_pattern)]
+    else:
+        search_domain = ['|', ('login', '=', identifier), ('mobile', '=', identifier)]
+
+    candidates = request.env['res.users'].sudo().search(search_domain)
+
+    user = request.env['res.users'].sudo()
+    inactive_user = request.env['res.users'].sudo()
+
+    for candidate in candidates:
+        match = False
+        if len(digits_only) >= 10:
+            last_10 = digits_only[-10:]
+            c_login_digits = ''.join(filter(str.isdigit, candidate.login or ""))
+            c_mobile_digits = ''.join(filter(str.isdigit, candidate.mobile or ""))
+
+            if (len(c_login_digits) >= 10 and c_login_digits[-10:] == last_10) or \
+               (len(c_mobile_digits) >= 10 and c_mobile_digits[-10:] == last_10):
+                match = True
+        else:
+            match = (candidate.login == identifier or candidate.mobile == identifier)
+
+        if match:
+            if candidate.active:
+                user = candidate
+                break
+            elif not inactive_user:
+                inactive_user = candidate
+
+    return user, inactive_user
+
+
+def normalize_whatsapp_number(raw):
+    """WhatsApp's API wants the full international number, no '+', no
+    spaces (e.g. "919876543210"). Contacts in this system are generally
+    stored as a bare 10-digit Indian number with no country code, so a
+    10-digit result gets "91" prefixed. Revisit if that assumption doesn't
+    hold for a particular contact/country.
+    """
+    digits = ''.join(filter(str.isdigit, raw or ''))
+    if len(digits) == 10:
+        return '91' + digits
+    return digits
+
+
+def issue_api_token(user):
+    """Reuse the caller's existing unexpired partner.api.key if there is
+    one, otherwise mint a new one. The one token system every authenticated
+    endpoint checks, regardless of which login method produced it."""
+    existing_token = request.env['partner.api.key'].sudo().search([
+        ('user_id', '=', user.id),
+        ('expiry_date', '>', datetime.now())
+    ], limit=1, order='expiry_date desc')
+
+    if existing_token:
+        return existing_token.api_key
+
+    token = secrets.token_hex(32)
+    request.env['partner.api.key'].sudo().create({
+        'user_id': user.id,
+        'api_key': token,
+        'expiry_date': datetime.now() + timedelta(days=30)
+    })
+    return token
+
+
+def complete_login(user, device_token=None):
+    """Everything a successful login - by any method - needs to do:
+    update the device token if it changed, issue/reuse the API bearer
+    token, kick off a live stock refresh, and build the standard success
+    response. Shared by /user_login and /verify_otp so both produce an
+    identical response shape and can never drift apart.
+    """
+    if device_token is not None and user.device_token != device_token:
+        user.sudo().write({'device_token': device_token})
+
+    token = issue_api_token(user)
+
+    # Synchronous stock sync on login so the app shows live stock immediately
+    try:
+        user.company_id._action_get_miracle_stock_ledger()
+    except Exception as e:
+        _logger.error("Failed to sync stock during login: %s", str(e))
+
+    partner = user.partner_id.with_company(user.company_id)
+
+    return {
+        'success': True,
+        'message': 'Login Successful!',
+        'user_id': user.id,
+        'name': user.name,
+        'email': user.login,
+        'access_token': token,
+        'customer': {
+            'partner_id': partner.id,
+            'name': partner.name,
+            'miracle_account_id': partner.miracle_account_id,
+            'mobile': partner.mobile,
+            'email': partner.email,
+            'street': partner.street,
+            'street2': partner.street2,
+            'city': partner.city,
+            'zip': partner.zip,
+            'state': partner.state_id.name if partner.state_id else None,
+            'country': partner.country_id.name if partner.country_id else None,
+            'credit_limit': fmt_num(partner.credit_limit),
+            'crdays': int(''.join(filter(str.isdigit, partner.property_payment_term_id.name or "0")) or 0)
+        }
+    }
+
 
 def validate_partner_token(request, user_id):
         # _logger.info("Validating partner token... %s", user_id or 'N/A')

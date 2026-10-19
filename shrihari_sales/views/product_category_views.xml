@@ -8,6 +8,20 @@
             <div name="button_box" position="before">
                 <field name="image_1920" widget="image" class="oe_avatar" options="{'preview_image': 'image_128'}"/>
             </div>
+            <xpath expr="//field[@name='parent_id']" position="after">
+                <field name="show_in_mobile_app"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="product_category_list_view_inherit_shrihari_sales" model="ir.ui.view">
+        <field name="name">product.category.list.inherit.shrihari.sales</field>
+        <field name="model">product.category</field>
+        <field name="inherit_id" ref="product.product_category_list_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='display_name']" position="after">
+                <field name="show_in_mobile_app" widget="boolean_toggle" optional="hide"/>
+            </xpath>
         </field>
     </record>
 </odoo>

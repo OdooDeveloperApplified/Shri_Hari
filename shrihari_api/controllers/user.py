@@ -2,8 +2,7 @@ from odoo.http import request, Response
 from odoo import http
 import json
 from datetime import datetime , timedelta
-import secrets
-from .token import validate_api_request, fmt_num
+from .token import validate_api_request, fmt_num, find_user_by_identifier, complete_login
 import logging
 _logger = logging.getLogger(__name__)
 
@@ -27,42 +26,8 @@ class UserController(http.Controller):
                 'message': 'Email or Mobile, and password are required!',
             }), content_type='application/json')
 
-        # Smart phone matching logic:
-        # If the input contains at least 10 digits, we extract the last 10 digits
-        digits_only = ''.join(filter(str.isdigit, login_identifier))
-        if len(digits_only) >= 10:
-            phone_pattern = '%' + '%'.join(list(digits_only[-10:])) + '%'
-            search_domain = ['|', ('login', '=', login_identifier), ('mobile', '=like', phone_pattern)]
-        else:
-            search_domain = ['|', ('login', '=', login_identifier), ('mobile', '=', login_identifier)]
+        user, inactive_user = find_user_by_identifier(login_identifier)
 
-        #  Search for the user using the smart domain
-        candidates = request.env['res.users'].sudo().search(search_domain)
-        
-        user = request.env['res.users'].sudo()
-        inactive_user = request.env['res.users'].sudo()
-        
-        # Strict Python filter
-        for candidate in candidates:
-            match = False
-            if len(digits_only) >= 10:
-                last_10 = digits_only[-10:]
-                c_login_digits = ''.join(filter(str.isdigit, candidate.login or ""))
-                c_mobile_digits = ''.join(filter(str.isdigit, candidate.mobile or ""))
-                
-                if (len(c_login_digits) >= 10 and c_login_digits[-10:] == last_10) or \
-                   (len(c_mobile_digits) >= 10 and c_mobile_digits[-10:] == last_10):
-                    match = True
-            else:
-                match = (candidate.login == login_identifier or candidate.mobile == login_identifier)
-                
-            if match:
-                if candidate.active:
-                    user = candidate
-                    break
-                elif not inactive_user:
-                    inactive_user = candidate
-        
         _logger.info("this is user %s", user)
         if not user:
             if inactive_user:
@@ -83,66 +48,9 @@ class UserController(http.Controller):
             credential = {'login': login_identifier, 'password': password, 'type': 'password'}
             uid=user_env.user._check_credentials(credential, user_env)
             _logger.info("Password verified successfully for user_id=%s", user.id)
-            
-            if user.device_token != device_token:
-                _logger.info("Device token changed for user_id=%s. Old: %s, New: %s", 
-                           user.id, user.device_token, device_token)
-                user.sudo().write({'device_token': device_token})
-                _logger.info("Device token updated for user_id=%s", user.id)
-            else:
-                _logger.info("Device token unchanged for user_id=%s", user.id)
 
-            # Search for an existing active token
-            existing_token = request.env['partner.api.key'].sudo().search([
-                ('user_id', '=', user.id),
-                ('expiry_date', '>', datetime.now())
-            ], limit=1, order='expiry_date desc')
-
-            if existing_token:
-                # Reuse the existing token
-                token = existing_token.api_key
-            else:
-                # Create a new token
-                token = secrets.token_hex(32)
-                access_token_dict = {
-                    'user_id': user.id,
-                    'api_key': token,
-                    'expiry_date': datetime.now() + timedelta(days=30)
-                }
-                request.env['partner.api.key'].sudo().create(access_token_dict)
-
-            # Synchronous stock sync on login so the app shows live stock immediately
-            try:
-                user.company_id._action_get_miracle_stock_ledger()
-            except Exception as e:
-                _logger.error("Failed to sync stock during login: %s", str(e))
-
-            partner = user.partner_id.with_company(user.company_id)
-
-            # If no exception, login is successful
-            return Response(json.dumps({
-                'success': True,
-                'message': 'Login Successful!',
-                'user_id': user.id,
-                'name': user.name,
-                'email': user.login,
-                'access_token': token,
-                'customer': {
-                    'partner_id': partner.id,
-                    'name': partner.name,
-                    'miracle_account_id': partner.miracle_account_id,
-                    'mobile': partner.mobile,
-                    'email': partner.email,
-                    'street': partner.street,
-                    'street2': partner.street2,
-                    'city': partner.city,
-                    'zip': partner.zip,
-                    'state': partner.state_id.name if partner.state_id else None,
-                    'country': partner.country_id.name if partner.country_id else None,
-                    'credit_limit': fmt_num(partner.credit_limit),
-                    'crdays': int(''.join(filter(str.isdigit, partner.property_payment_term_id.name or "0")) or 0)
-                }
-            }), content_type='application/json')
+            result = complete_login(user, device_token=device_token)
+            return Response(json.dumps(result), content_type='application/json')
 
         except Exception as e:
             # Wrong password or unexpected error

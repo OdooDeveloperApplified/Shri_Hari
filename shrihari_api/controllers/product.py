@@ -25,19 +25,27 @@ class ProductAPI(http.Controller):
         
         domain = []
         category = None
-        
+
+        # Find all categories marked not to show in mobile app (and any subcategories under them)
+        hidden_categories = request.env['product.category'].sudo().search([('show_in_mobile_app', '=', False)])
+        all_hidden_ids = []
+        if hidden_categories:
+            all_hidden_ids = request.env['product.category'].sudo().search([('id', 'child_of', hidden_categories.ids)]).ids
+
         if category_id:
             try:
                 category = request.env['product.category'].sudo().browse(int(category_id))
-                if not category.exists():
+                if not category.exists() or category.id in all_hidden_ids or not category.show_in_mobile_app:
                     return Response(
                         json.dumps({
                             "success": False,
-                            "message": "Invalid category_id"
+                            "message": "Category not available"
                         }),
                         content_type='application/json'
                     )
                 domain = [('categ_id', 'child_of', category.id)]
+                if all_hidden_ids:
+                    domain.append(('categ_id', 'not in', all_hidden_ids))
             except ValueError:
                 return Response(
                     json.dumps({
@@ -47,7 +55,10 @@ class ProductAPI(http.Controller):
                     status=400,
                     content_type='application/json'
                 )
-        
+        else:
+            if all_hidden_ids:
+                domain = [('categ_id', 'not in', all_hidden_ids)]
+
         # Fetch products for the given category (including child categories) or all products if no category_id
         products = request.env['product.template'].sudo().search(domain)
         

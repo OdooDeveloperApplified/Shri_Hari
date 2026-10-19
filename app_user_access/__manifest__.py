@@ -1,12 +1,12 @@
 {
     'name': 'App User Access Management',
-    'version': '18.0.1.0.0',
+    'version': '18.0.1.0.1',
     'category': 'Administration',
-    'summary': 'Custom wizard to grant App (Internal User) access using Mobile login.',
+    'summary': 'Custom wizard to grant App (Internal User) access using Mobile login (OTP).',
     'description': """
         This module provides a custom wizard on the Contact (res.partner) model 
         to easily create Internal Users for the mobile app, using the contact's 
-        mobile number as their login.
+        mobile number as their login. Authentication is performed via OTP.
     """,
     'author': 'Shree Hari',
     'depends': ['base', 'contacts'],

@@ -4,9 +4,13 @@
         <field name="name">res.partner.form.inherit.shrihari.sales</field>
         <field name="model">res.partner</field>
         <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="priority">99</field>
         <field name="arch" type="xml">
+            <xpath expr="//field[@name='email']" position="attributes">
+                <attribute name="required">0</attribute>
+            </xpath>
             <xpath expr="//field[@name='category_id']" position="after">
-                <field name="apply_freight_charge"/>
+                <field name="apply_freight_charge" invisible="parent_id"/>
             </xpath>
         </field>
     </record>

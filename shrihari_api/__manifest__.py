@@ -9,6 +9,8 @@
         'security/ir.model.access.csv',
         'views/api_access_token.xml',
         'views/res_company.xml',
+        'views/res_config_settings.xml',
+        'views/whatsapp_otp.xml',
     ],
     'license': 'LGPL-3',
     'installable': True,

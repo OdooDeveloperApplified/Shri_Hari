@@ -174,9 +174,6 @@ class AppAccessWizardUser(models.TransientModel):
         if self.is_internal:
             raise UserError(f'The partner "{self.partner_id.name}" already has internal app access.')
 
-        if not self.password:
-            raise UserError(f'Please enter a password for "{self.partner_id.name}".')
-
         # Save back the mobile to partner if changed
         if self.mobile and self.partner_id.mobile != self.mobile:
             self.partner_id.write({'mobile': self.mobile})
@@ -189,22 +186,26 @@ class AppAccessWizardUser(models.TransientModel):
         if not user_sudo:
             # create a new user
             company = self.partner_id.company_id or self.env.company
-            user_sudo = self.env['res.users'].sudo().with_company(company.id).with_context(no_reset_password=True).create({
+            user_vals = {
                 'name': self.partner_id.name,
                 'login': normalized_login,
-                'password': self.password,
                 'partner_id': self.partner_id.id,
                 'company_id': company.id,
                 'company_ids': [(6, 0, company.ids)],
                 'groups_id': [(6, 0, [group_user.id])],
-            })
+            }
+            if self.password:
+                user_vals['password'] = self.password
+            user_sudo = self.env['res.users'].sudo().with_company(company.id).with_context(no_reset_password=True).create(user_vals)
         else:
-            # Ensure the user has the internal group and set the password
-            user_sudo.write({
+            # Ensure the user has the internal group and reactivate if archived
+            update_vals = {
                 'active': True,
                 'groups_id': [(4, group_user.id)],
-                'password': self.password
-            })
+            }
+            if self.password:
+                update_vals['password'] = self.password
+            user_sudo.write(update_vals)
             
             # If their login was something else, and we want it to be mobile now
             if user_sudo.login != normalized_login:
